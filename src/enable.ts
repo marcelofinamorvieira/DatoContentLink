@@ -160,6 +160,8 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
   });
 
   let currentMatch: ResolvedMatch | null = null;
+  const cursorMemory = new WeakMap<HTMLElement, string | null>();
+  let activeCursorElement: HTMLElement | null = null;
 
   const updateOverlayPosition = rafThrottle(() => {
     if (!currentMatch) {
@@ -284,8 +286,37 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
     }
   }
 
+  function applyPointerCursor(element: Element): void {
+    if (!isHTMLElement(element)) {
+      return;
+    }
+    if (activeCursorElement === element) {
+      return;
+    }
+    restorePointerCursor();
+    activeCursorElement = element;
+    if (!cursorMemory.has(element)) {
+      cursorMemory.set(element, element.style.cursor || null);
+    }
+    element.style.cursor = 'pointer';
+  }
+
+  function restorePointerCursor(): void {
+    if (!activeCursorElement) {
+      return;
+    }
+    const previous = cursorMemory.get(activeCursorElement);
+    if (previous === undefined || previous === null || previous === '') {
+      activeCursorElement.style.removeProperty('cursor');
+    } else {
+      activeCursorElement.style.cursor = previous;
+    }
+    activeCursorElement = null;
+  }
+
   function setCurrentMatch(match: ResolvedMatch): void {
     currentMatch = match;
+    applyPointerCursor(match.highlightElement);
     const box = measureElement(match.highlightElement);
     if (box) {
       overlay.highlight(box);
@@ -295,6 +326,7 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
   function clearCurrentMatch(): void {
     currentMatch = null;
     overlay.hide();
+    restorePointerCursor();
   }
 
   function openDatoLink(match: ResolvedMatch, event: MouseEvent): boolean | void {
@@ -314,6 +346,7 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
   const dispose = () => {
     observer.stop();
     overlay.dispose();
+    restorePointerCursor();
     updateOverlayPosition.cancel();
     document.removeEventListener('pointerover', onPointerOver, true);
     document.removeEventListener('focusin', onFocusIn, true);

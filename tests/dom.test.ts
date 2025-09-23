@@ -117,6 +117,37 @@ describe('enableDatoVisualEditing', () => {
     dispose();
   });
 
+  it('uses prebuilt editUrl when provided', async () => {
+    const editUrl = 'https://acme.admin.datocms.com/editor/item_types/article/items/123/edit#fieldPath=subtitle';
+    const payload = {
+      origin: 'datocms.com',
+      href: editUrl,
+    };
+    const encoded = vercelStegaCombine('Subhead', payload);
+
+    document.body.innerHTML = `<p id="subhead">${encoded}</p>`;
+    const subhead = document.getElementById('subhead')!;
+    subhead.getBoundingClientRect = () => createRect(0, 0, 100, 20);
+
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    const dispose = enableDatoVisualEditing({
+      baseEditingUrl: 'https://acme.admin.datocms.com',
+      activate: 'always',
+      overlays: 'hover',
+      showBadge: false,
+      openInNewTab: true,
+    });
+
+    subhead.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    subhead.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+    expect(openSpy).toHaveBeenCalledWith(editUrl, '_blank', 'noopener');
+
+    dispose();
+  });
+
   it('handles image alt metadata', async () => {
     const altPayload = { cms: 'datocms', itemId: 'asset_1', fieldPath: 'gallery.0.alt' };
     const encodedAlt = vercelStegaCombine('Hero image', altPayload);

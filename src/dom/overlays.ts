@@ -52,9 +52,9 @@ export class OverlayManager {
     outline.setAttribute('role', 'presentation');
     outline.style.position = 'absolute';
     outline.style.borderRadius = '8px';
-    outline.style.border = '2px solid #ff5c8d';
+    outline.style.border = '2px solid #ff7751';
     outline.style.boxSizing = 'border-box';
-    outline.style.background = 'rgba(255,92,141,0.08)';
+    outline.style.background = 'rgba(255,119,81,0.12)';
     outline.style.pointerEvents = 'none';
     if (!prefersReducedMotion()) {
       outline.style.transition = 'transform 120ms ease, width 120ms ease, height 120ms ease, opacity 120ms ease';
@@ -77,7 +77,7 @@ export class OverlayManager {
       badge.style.padding = '4px 8px';
       badge.style.borderRadius = '999px';
       badge.style.border = 'none';
-      badge.style.background = '#ff5c8d';
+      badge.style.background = '#ff7751';
       badge.style.color = '#ffffff';
       badge.style.boxShadow = '0 2px 6px rgba(0,0,0,0.2)';
       badge.style.cursor = 'pointer';

@@ -119,6 +119,12 @@ The initializer returns a disposer if you need to tear everything down (SPA rout
 - `showBadge`: toggle the badge. When enabled, it’s clickable + keyboard accessible (`Enter` / `Space`).
 - Respect for `prefers-reduced-motion` disables outline animations automatically.
 
+### Deep link behaviour
+
+- If a stega payload already carries an `editUrl` that matches your `baseEditingUrl` origin, the overlay reuses it verbatim so editor tabs, locales, and `#fieldPath` hashes stay intact.
+- Otherwise we build the URL from `baseEditingUrl`, optional `environment`, `itemTypeId`, and `itemId`, and append the normalized `fieldPath` (when available) as `#fieldPath=`.
+- Trim trailing slashes from `baseEditingUrl` (for example store `https://acme.admin.datocms.com` instead of the version with a trailing `/`) to avoid doubled slashes in the generated deep links.
+
 ## Field targeting tips
 
 - DatoCMS exposes `#fieldPath=` anchors in the editor—payloads from stega already include them for structured text spans and modular content. You can override or augment the path by decorating any ancestor with `data-datocms-field-path="blocks.0.title"`.
