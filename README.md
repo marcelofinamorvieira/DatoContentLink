@@ -1,0 +1,178 @@
+# datocms-visual-editing
+
+Click-to-edit overlays for content rendered from DatoCMS stega metadata—no Vercel toolbar required. Drop the tiny ES module into any preview build, decode the hidden payloads, and jump straight to the right record + field inside the DatoCMS editor.
+
+```
+DatoCMS GraphQL → content with hidden markers → overlay → Dato editor deep link
+```
+
+## How it works
+
+```
+┌──────────────┐      X-Visual-Editing headers      ┌───────────────┐
+│  Your site   │ ─────────────────────────────────▶ │ DatoCMS CDA    │
+└──────┬───────┘                                     └──────┬────────┘
+       │ cleaned text + @vercel/stega markers                │
+       ▼                                                      ▼
+┌──────────────┐   decode + map ids   ┌────────────────────┐  Deep link with
+│ Visual layer │ ───────────────────▶ │ enableDatoVisual…() │ ───────────────▶
+└──────┬───────┘   overlays + badge   └────────────────────┘  #fieldPath hash
+       │                                                      
+       ▼                                                      
+   DatoCMS editor opens at the exact record + field
+```
+
+Under the hood we:
+
+1. Require the two Dato headers so the Content Delivery API embeds `@vercel/stega` metadata in strings and image alts.
+2. Decode the payload client-side (MPL-2.0 `@vercel/stega` dependency) into `itemId`, `itemTypeId`, `fieldPath`, etc.
+3. Draw unobtrusive overlays above the matching DOM nodes (or custom containers) and wire click/keyboard handlers that deep link to the admin UI with `#fieldPath=`.
+
+## Installation
+
+```bash
+pnpm add datocms-visual-editing
+# or
+npm install datocms-visual-editing
+```
+
+Target Node ≥ 18 / evergreen browsers. The package ships ESM-only output in `dist/` and has no runtime dependencies besides `@vercel/stega`.
+
+## Getting stega metadata from DatoCMS
+
+Enable the headers on every GraphQL request that powers your preview surface:
+
+```ts
+import { withContentLinkHeaders } from 'datocms-visual-editing';
+
+const fetchWithHeaders = withContentLinkHeaders(fetch);
+await fetchWithHeaders('https://graphql.datocms.com/', {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${process.env.DATO_CDA_TOKEN}`,
+    'Content-Type': 'application/json',
+    'X-Base-Editing-Url': 'https://acme.admin.datocms.com'
+  },
+  body: JSON.stringify({ query })
+});
+```
+
+Adapters:
+
+- `graphql-request` client:
+  ```ts
+  import { GraphQLClient } from 'graphql-request';
+  import { withContentLinkHeaders } from 'datocms-visual-editing';
+
+  const rawFetch = withContentLinkHeaders(fetch);
+
+  const client = new GraphQLClient(endpoint, {
+    fetch: rawFetch,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'X-Base-Editing-Url': 'https://acme.admin.datocms.com'
+    }
+  });
+  ```
+- Apollo Link:
+  ```ts
+  import { setContext } from '@apollo/client/link/context';
+
+  const contentLinkHeaders = setContext((_, { headers }) => ({
+    headers: {
+      ...headers,
+      'X-Visual-Editing': 'vercel-v1',
+      'X-Base-Editing-Url': 'https://acme.admin.datocms.com'
+    }
+  }));
+  ```
+
+## Usage in the browser
+
+```ts
+import { enableDatoVisualEditing } from 'datocms-visual-editing';
+
+enableDatoVisualEditing({
+  baseEditingUrl: 'https://acme.admin.datocms.com',
+  activate: 'query',           // default: ?edit=1 toggles on
+  overlays: 'hover',           // 'always' | 'hover' | 'off'
+  showBadge: true,             // tiny “Open in DatoCMS” badge
+  targetAttribute: 'data-datocms-edit-target',
+  openInNewTab: true
+});
+```
+
+The initializer returns a disposer if you need to tear everything down (SPA route change, etc.).
+
+### Activation strategies
+
+| Mode            | Description                                                             |
+|-----------------|-------------------------------------------------------------------------|
+| `always`        | Force-enable (preview deployments).                                     |
+| `query` (default)| Checks `?edit=1` (customizable via `activationQueryParam`).            |
+| `localStorage`  | Reads a toggle key (default `datocms:ve === '1'`).                       |
+| function        | Pass a custom `(window) => boolean` predicate.                          |
+
+### Overlay controls
+
+- `targetAttribute`: Place `data-datocms-edit-target` on a container to highlight the entire card while still decoding stega hidden inside a child node. Existing `data-vercel-edit-target` hooks are honoured too.
+- `showBadge`: toggle the badge. When enabled, it’s clickable + keyboard accessible (`Enter` / `Space`).
+- Respect for `prefers-reduced-motion` disables outline animations automatically.
+
+## Field targeting tips
+
+- DatoCMS exposes `#fieldPath=` anchors in the editor—payloads from stega already include them for structured text spans and modular content. You can override or augment the path by decorating any ancestor with `data-datocms-field-path="blocks.0.title"`.
+- Keep overlay positioning accurate by avoiding large `letter-spacing` tweaks in preview modes. If you must, call `stripStega()` on the string before measuring text widths.
+
+## API surface
+
+| Export | Description |
+|--------|-------------|
+| `enableDatoVisualEditing(opts)` | Mounts the visual layer and returns a disposer. |
+| `withContentLinkHeaders(fetch?)` | Wraps `fetch` to inject `X-Visual-Editing` + verify `X-Base-Editing-Url`. |
+| `decodeStega(text)` | Returns normalized `DecodedInfo` (`itemId`, `itemTypeId`, `fieldPath`, etc.) or `null`. |
+| `stripStega(text)` | Removes hidden characters so you can measure text without re-rendering. |
+
+### `onResolveUrl` hook
+
+You can intercept every decoded payload and swap the destination URL:
+
+```ts
+enableDatoVisualEditing({
+  baseEditingUrl: 'https://acme.admin.datocms.com',
+  activate: 'always',
+  onResolveUrl(info) {
+    if (info.fieldPath?.startsWith('seo.')) {
+      return `${info.editUrl ?? 'https://acme.admin.datocms.com/editor/items/' + info.itemId + '/edit'}#tab=seo`;
+    }
+    return null; // skip overlay if you can’t build a safe URL
+  }
+});
+```
+
+Return `null` to disable overlays for that payload.
+
+## Examples
+
+- `examples/plain-js/index.html`: minimal script tag that fetches GraphQL with the headers, renders structured text, and activates overlays when `?edit=1` is present.
+- `examples/nextjs-app-router/`: Next.js 14 App Router demo showing how to restrict `enableDatoVisualEditing` to preview mode and wrap cards with `data-datocms-edit-target` for larger hitboxes.
+
+## Troubleshooting
+
+- **No overlays showing** – Double check the headers, ensure `baseEditingUrl` matches your project (and environment), and verify the activation toggle.
+- **Badge/outline misaligned** – Overlay dimensions come from the nearest container with `data-datocms-edit-target`; add the attribute around a stable wrapper or strip stega characters before custom measurements.
+- **Navigation blocked** – Use `onBeforeOpen((url, event) => boolean)` to permit or cancel the editor jump on a per-click basis.
+
+## Contributing & testing
+
+```bash
+pnpm install
+pnpm build
+pnpm test
+```
+
+Vitest + jsdom cover decoding, deep-link building, and DOM behaviors.
+
+## Licensing
+
+The project itself is MIT licensed (see `LICENSE`). It bundles `@vercel/stega` under MPL-2.0—details live in `LICENSES.md`.

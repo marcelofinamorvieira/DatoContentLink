@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>DatoCMS Visual Editing – Plain JS Demo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 640px;
+        margin: 2rem auto;
+        line-height: 1.55;
+      }
+
+      .card {
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        background: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>DatoCMS Visual Editing (Plain JS)</h1>
+    <p>
+      Append <code>?edit=1</code> to the URL to activate overlays. This demo assumes
+      you fetched content from DatoCMS with the required visual editing headers.
+    </p>
+
+    <article class="card" data-datocms-edit-target>
+      <h2 id="hero-title">Loading…</h2>
+      <p id="hero-copy">Fetching from DatoCMS Content Delivery API…</p>
+      <img id="hero-image" alt="" style="max-width: 100%; border-radius: 6px;" />
+    </article>
+
+    <script type="module">
+      import {
+        enableDatoVisualEditing,
+        withContentLinkHeaders
+      } from 'datocms-visual-editing';
+
+      const API_TOKEN = import.meta.env?.VITE_DATO_PREVIEW_TOKEN;
+      const BASE_EDITING_URL = 'https://YOURPROJECT.admin.datocms.com';
+
+      const fetchWithHeaders = withContentLinkHeaders(fetch);
+
+      async function loadContent() {
+        const response = await fetchWithHeaders('https://graphql.datocms.com/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${API_TOKEN}`,
+            'X-Base-Editing-Url': BASE_EDITING_URL
+          },
+          body: JSON.stringify({
+            query: `{
+              hero {
+                title
+                copy
+                image {
+                  url
+                  alt
+                }
+              }
+            }`
+          })
+        });
+
+        const { data } = await response.json();
+        const hero = data.hero;
+
+        document.getElementById('hero-title').textContent = hero.title;
+        document.getElementById('hero-copy').textContent = hero.copy;
+        const img = document.getElementById('hero-image');
+        img.src = hero.image.url;
+        img.alt = hero.image.alt;
+      }
+
+      loadContent().catch((error) => {
+        console.error('Failed to load DatoCMS content', error);
+      });
+
+      enableDatoVisualEditing({
+        baseEditingUrl: BASE_EDITING_URL,
+        activate: 'query',
+        overlays: 'hover',
+        showBadge: true,
+        targetAttribute: 'data-datocms-edit-target'
+      });
+    </script>
+  </body>
+</html>
