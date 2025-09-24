@@ -148,6 +148,47 @@ describe('enableDatoVisualEditing', () => {
     dispose();
   });
 
+  it('logs debug details on overlay click when debug is enabled', async () => {
+    const payload = {
+      cms: 'datocms',
+      itemId: '456',
+      itemTypeId: 'article',
+      fieldPath: 'excerpt'
+    };
+    const encoded = vercelStegaCombine('Snippet', payload);
+
+    document.body.innerHTML = `<p id="snippet">${encoded}</p>`;
+    const snippet = document.getElementById('snippet')!;
+    snippet.getBoundingClientRect = () => createRect(0, 0, 120, 18);
+
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    const dispose = enableDatoVisualEditing({
+      baseEditingUrl: 'https://acme.admin.datocms.com',
+      activate: 'always',
+      overlays: 'hover',
+      showBadge: false,
+      openInNewTab: true,
+      debug: true
+    });
+
+    snippet.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    snippet.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+    expect(openSpy).toHaveBeenCalledOnce();
+    expect(logSpy).toHaveBeenCalledWith(
+      '[datocms-visual-editing][debug] overlay click',
+      expect.objectContaining({
+        url: 'https://acme.admin.datocms.com/editor/item_types/article/items/456/edit#fieldPath=excerpt',
+        info: expect.objectContaining({ itemId: '456', fieldPath: 'excerpt' })
+      })
+    );
+
+    dispose();
+  });
+
   it('handles image alt metadata', async () => {
     const altPayload = { cms: 'datocms', itemId: 'asset_1', fieldPath: 'gallery.0.alt' };
     const encodedAlt = vercelStegaCombine('Hero image', altPayload);

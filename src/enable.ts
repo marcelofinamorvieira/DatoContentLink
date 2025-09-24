@@ -20,6 +20,7 @@ export type EnableOptions = {
   onResolveUrl?: (info: DecodedInfo) => string | null;
   openInNewTab?: boolean;
   onBeforeOpen?: (url: string, ev: MouseEvent) => boolean | void;
+  debug?: boolean;
 };
 
 type ResolvedMatch = {
@@ -35,7 +36,8 @@ const DEFAULTS = {
   overlays: 'hover' as const,
   showBadge: true,
   targetAttribute: 'data-datocms-edit-target' as const,
-  openInNewTab: true
+  openInNewTab: true,
+  debug: false
 };
 
 const FIELD_PATH_ATTR = 'data-datocms-field-path';
@@ -136,6 +138,7 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
     showBadge: boolean;
     targetAttribute: TargetAttribute;
     openInNewTab: boolean;
+    debug: boolean;
   };
 
   const baseEditingUrl = normalizeBaseUrl(options.baseEditingUrl);
@@ -330,6 +333,15 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
   }
 
   function openDatoLink(match: ResolvedMatch, event: MouseEvent): boolean | void {
+    if (options.debug) {
+      console.log('[datocms-visual-editing][debug] overlay click', {
+        eventType: event.type,
+        url: match.url,
+        info: match.info,
+        element: match.highlightElement
+      });
+    }
+
     const proceed = options.onBeforeOpen ? options.onBeforeOpen(match.url, event) : undefined;
     if (proceed === false) {
       return false;

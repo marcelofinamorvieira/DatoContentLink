@@ -119,6 +119,20 @@ The initializer returns a disposer if you need to tear everything down (SPA rout
 - `showBadge`: toggle the badge. When enabled, it’s clickable + keyboard accessible (`Enter` / `Space`).
 - Respect for `prefers-reduced-motion` disables outline animations automatically.
 
+### Debug mode
+
+Flip on verbose logging during preview/debug sessions:
+
+```ts
+enableDatoVisualEditing({
+  baseEditingUrl: 'https://acme.admin.datocms.com',
+  activate: 'always',
+  debug: true
+});
+```
+
+Every overlay click outputs a `[datocms-visual-editing][debug] overlay click` entry with the resolved URL, decoded metadata, and the highlighted DOM node. Handy when verifying that your field paths, environments, and custom `onResolveUrl` logic line up with expectations.
+
 ### Deep link behaviour
 
 - If a stega payload already carries an `editUrl` that matches your `baseEditingUrl` origin, the overlay reuses it verbatim so editor tabs, locales, and `#fieldPath` hashes stay intact.
