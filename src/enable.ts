@@ -1,4 +1,4 @@
-import { StegaObserver, type TextStegaMatch, type ImageStegaMatch } from './dom/observer.js';
+import { StegaObserver, type TextStegaMatch, type ImageStegaMatch, type ExplicitStegaMatch } from './dom/observer.js';
 import { OverlayManager } from './dom/overlays.js';
 import {
   measureElement,
@@ -13,7 +13,7 @@ import {
 import { buildDatoDeepLink } from './link/buildDatoDeepLink.js';
 import { normalizeFieldPath } from './link/fieldPath.js';
 import { DecodedInfo } from './decode/types.js';
-import { resolveHighlightContainer, hasDatoTarget, TargetAttribute } from './utils/attr.js';
+import { resolveHighlightContainer, hasDatoTarget, TargetAttribute, FIELD_PATH_ATTR } from './utils/attr.js';
 import { isElement, isHTMLElement } from './utils/guards.js';
 import { rafThrottle } from './utils/throttle.js';
 
@@ -45,7 +45,7 @@ type ResolvedMatch = {
   getRects: () => OverlayBoxes;
   cursorElement: Element | null;
   initialRects?: OverlayBoxes;
-  debugNode?: Text | HTMLImageElement;
+  debugNode?: Element | Text;
 };
 
 type TextMatchContext = {
@@ -70,8 +70,6 @@ const DEFAULTS = {
   mergeSegments: 'proximity' as const,
   mergeProximity: 6 as EdgePadding
 };
-
-const FIELD_PATH_ATTR = 'data-datocms-field-path';
 
 function normalizeBaseUrl(url: string): string {
   if (!url) {
@@ -312,6 +310,13 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
     const target = event.target;
 
     if (isElement(target)) {
+      const explicitMatch = observer.getExplicitMatch(target);
+      if (explicitMatch) {
+        const resolvedExplicit = createExplicitMatch(explicitMatch);
+        if (resolvedExplicit) {
+          return resolvedExplicit;
+        }
+      }
       const imageMatch = observer.getImageMatch(target);
       if (imageMatch) {
         const resolved = createImageMatch(imageMatch);
@@ -322,7 +327,98 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
     }
 
     if (Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
+      const explicitAtPoint = resolveExplicitMatchAtPoint(event.clientX, event.clientY);
+      if (explicitAtPoint) {
+        return explicitAtPoint;
+      }
+      const imgAtPoint = resolveImageMatchAtPoint(event.clientX, event.clientY);
+      if (imgAtPoint) {
+        return imgAtPoint;
+      }
+
       return resolveTextMatchAtPoint(event.clientX, event.clientY);
+    }
+
+    return null;
+  }
+
+  function resolveExplicitMatchAtPoint(clientX: number, clientY: number): ResolvedMatch | null {
+    if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
+      return null;
+    }
+
+    const elements = typeof document.elementsFromPoint === 'function'
+      ? document.elementsFromPoint(clientX, clientY)
+      : [];
+
+    if (!elements.length) {
+      return null;
+    }
+
+    const pageX = clientX + window.scrollX;
+    const pageY = clientY + window.scrollY;
+
+    for (const element of elements) {
+      if (!(element instanceof Element)) {
+        continue;
+      }
+
+      const direct = observer.getExplicitMatch(element);
+      if (direct) {
+        const resolved = createExplicitMatch(direct);
+        if (resolved && resolved.getRects().some((rect) => pointInBox(pageX, pageY, rect))) {
+          return resolved;
+        }
+      }
+
+      const descendants = observer.getExplicitMatchesWithin(element);
+      for (const candidate of descendants) {
+        const resolved = createExplicitMatch(candidate);
+        if (resolved && resolved.getRects().some((rect) => pointInBox(pageX, pageY, rect))) {
+          return resolved;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  function resolveImageMatchAtPoint(clientX: number, clientY: number): ResolvedMatch | null {
+    if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
+      return null;
+    }
+
+    const elements = typeof document.elementsFromPoint === 'function'
+      ? document.elementsFromPoint(clientX, clientY)
+      : [];
+
+    if (!elements.length) {
+      return null;
+    }
+
+    const pageX = clientX + window.scrollX;
+    const pageY = clientY + window.scrollY;
+
+    for (const element of elements) {
+      if (!(element instanceof Element)) {
+        continue;
+      }
+
+      const directMatch = observer.getImageMatch(element);
+      if (directMatch) {
+        const resolved = createImageMatch(directMatch);
+        if (resolved && resolved.getRects().some((rect) => pointInBox(pageX, pageY, rect))) {
+          return resolved;
+        }
+      }
+
+      const descendantMatches = observer.getImageMatchesWithin(element);
+      for (const candidate of descendantMatches) {
+        const resolved = createImageMatch(candidate);
+        if (resolved && resolved.getRects().some((rect) => pointInBox(pageX, pageY, rect))) {
+          return resolved;
+        }
+      }
     }
 
     return null;
@@ -331,6 +427,14 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
   function resolveFocusMatch(target: EventTarget | null): ResolvedMatch | null {
     if (!isElement(target)) {
       return null;
+    }
+
+    const explicitMatch = observer.getExplicitMatch(target);
+    if (explicitMatch) {
+      const resolved = createExplicitMatch(explicitMatch);
+      if (resolved) {
+        return resolved;
+      }
     }
 
     const imageMatch = observer.getImageMatch(target);
@@ -413,9 +517,13 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
     };
   }
 
-  function createImageMatch(match: ImageStegaMatch): ResolvedMatch | null {
+  function createExplicitMatch(match: ExplicitStegaMatch): ResolvedMatch | null {
     const element = match.element;
-    const fieldPath = findFieldPath(element);
+    const targetAttr = options.targetAttribute ?? DEFAULTS.targetAttribute;
+    const highlightContainer = resolveHighlightContainer(element, targetAttr);
+    const containerIsTarget = highlightContainer && hasDatoTarget(highlightContainer);
+    const fieldPathElement = containerIsTarget ? highlightContainer : element;
+    const fieldPath = findFieldPath(fieldPathElement) ?? findFieldPath(element);
     const infoWithField = withFieldPath(match.info, fieldPath);
     const url = resolveUrl(infoWithField);
     if (!url) {
@@ -423,6 +531,42 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
     }
 
     const getRects = () => {
+      const measurementElement = containerIsTarget ? highlightContainer! : element;
+      const box = measureElement(measurementElement);
+      return transformRects(box ? [box] : []);
+    };
+
+    const initialRects = getRects();
+
+    return {
+      info: infoWithField,
+      url,
+      getRects,
+      cursorElement: containerIsTarget ? highlightContainer : element,
+      initialRects,
+      debugNode: element
+    };
+  }
+
+  function createImageMatch(match: ImageStegaMatch): ResolvedMatch | null {
+    const element = match.element;
+    const targetAttr = options.targetAttribute ?? DEFAULTS.targetAttribute;
+    const highlightContainer = resolveHighlightContainer(element, targetAttr);
+    const containerIsTarget = highlightContainer && hasDatoTarget(highlightContainer);
+    const fieldPath = findFieldPath(containerIsTarget ? highlightContainer : element) ?? findFieldPath(element);
+    const infoWithField = withFieldPath(match.info, fieldPath);
+    const url = resolveUrl(infoWithField);
+    if (!url) {
+      return null;
+    }
+
+    const getRects = () => {
+      if (containerIsTarget) {
+        const containerBox = measureElement(highlightContainer!);
+        if (containerBox) {
+          return transformRects([containerBox]);
+        }
+      }
       const box = measureElement(element);
       const rects = box ? [box] : [];
       return transformRects(rects);
@@ -434,7 +578,7 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
       info: infoWithField,
       url,
       getRects,
-      cursorElement: element,
+      cursorElement: containerIsTarget ? highlightContainer : element,
       initialRects,
       debugNode: element instanceof HTMLImageElement ? element : undefined
     };

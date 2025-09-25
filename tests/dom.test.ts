@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as stega from '@vercel/stega';
-import { enableDatoVisualEditing } from '../src/index.js';
+import { enableDatoVisualEditing, buildEditTagAttributes } from '../src/index.js';
 
 const { vercelStegaCombine, vercelStegaSplit } = stega;
 
@@ -277,6 +277,176 @@ describe('enableDatoVisualEditing', () => {
       'https://acme.admin.datocms.com/editor/items/asset_1/edit#fieldPath=gallery.0.alt',
       '_blank',
       'noopener'
+    );
+
+    dispose();
+  });
+
+  it('resolves image matches when hovering a wrapper container', async () => {
+    const payload = { cms: 'datocms', itemId: 'asset_2', fieldPath: 'gallery.1.alt' };
+    const encoded = vercelStegaCombine('Gallery item', payload);
+
+    document.body.innerHTML = `
+      <a id="wrapper" data-datocms-edit-target>
+        <img id="photo" alt="${encoded}" />
+      </a>
+    `;
+
+    const wrapper = document.getElementById('wrapper')!;
+    const photo = document.getElementById('photo') as HTMLImageElement;
+
+    wrapper.getBoundingClientRect = () => createRect(10, 20, 200, 120);
+    photo.getBoundingClientRect = () => createRect(30, 40, 160, 80);
+
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    const dispose = enableDatoVisualEditing({
+      baseEditingUrl: 'https://acme.admin.datocms.com',
+      activate: 'always',
+      overlays: 'hover',
+      showBadge: true,
+      openInNewTab: false,
+      hoverLingerMs: 0
+    });
+
+    wrapper.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 60, clientY: 50 }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const overlayRoot = document.body.lastElementChild as HTMLElement;
+    expect(overlayRoot.style.transform).toBe('translate(2px, 12px)');
+
+    wrapper.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 60, clientY: 50 }));
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://acme.admin.datocms.com/editor/items/asset_2/edit#fieldPath=gallery.1.alt',
+      '_self'
+    );
+
+    dispose();
+  });
+
+  it('falls back to container geometry when the image box is zero-sized', async () => {
+    const payload = { cms: 'datocms', itemId: 'asset_3', fieldPath: 'gallery.2.alt' };
+    const encoded = vercelStegaCombine('Gallery thumb', payload);
+
+    document.body.innerHTML = `
+      <figure id="frame" data-datocms-edit-target>
+        <img id="thumb" alt="${encoded}" />
+      </figure>
+    `;
+
+    const frame = document.getElementById('frame')!;
+    const thumb = document.getElementById('thumb') as HTMLImageElement;
+
+    frame.getBoundingClientRect = () => createRect(0, 0, 180, 90);
+    thumb.getBoundingClientRect = () => createRect(0, 0, 0, 0);
+
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    const dispose = enableDatoVisualEditing({
+      baseEditingUrl: 'https://acme.admin.datocms.com',
+      activate: 'always',
+      overlays: 'hover',
+      showBadge: false,
+      openInNewTab: false,
+      hoverLingerMs: 0
+    });
+
+    frame.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 20, clientY: 20 }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const overlayRoot = document.body.lastElementChild as HTMLElement;
+    expect(overlayRoot.style.transform).toBe('translate(-8px, -8px)');
+
+    frame.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 20, clientY: 20 }));
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://acme.admin.datocms.com/editor/items/asset_3/edit#fieldPath=gallery.2.alt',
+      '_self'
+    );
+
+    dispose();
+  });
+
+  it('honours explicit edit info JSON tags', async () => {
+    const wrapper = document.createElement('div');
+    wrapper.getBoundingClientRect = () => createRect(10, 20, 180, 60);
+    wrapper.setAttribute('data-datocms-edit-target', '');
+
+    const attrs = buildEditTagAttributes({
+      editUrl: 'https://acme.admin.datocms.com/editor/items/900/edit#fieldPath=stats.count',
+      locale: 'en'
+    });
+    Object.entries(attrs).forEach(([name, value]) => wrapper.setAttribute(name, value));
+
+    wrapper.textContent = '42';
+    document.body.appendChild(wrapper);
+
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    const dispose = enableDatoVisualEditing({
+      baseEditingUrl: 'https://acme.admin.datocms.com',
+      activate: 'always',
+      overlays: 'hover',
+      showBadge: false,
+      openInNewTab: false,
+      hoverLingerMs: 0
+    });
+
+    wrapper.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 40, clientY: 30 }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const overlayRoot = document.body.lastElementChild as HTMLElement;
+    expect(overlayRoot.style.transform).toBe('translate(2px, 12px)');
+
+    wrapper.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 40, clientY: 30 }));
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://acme.admin.datocms.com/editor/items/900/edit#fieldPath=stats.count',
+      '_self'
+    );
+
+    dispose();
+  });
+
+  it('supports split attribute edit tags', async () => {
+    document.body.innerHTML = `
+      <div id="stat" data-datocms-edit-target data-datocms-field-path="metrics.views">
+        <span class="value">1,024</span>
+      </div>
+    `;
+
+    const stat = document.getElementById('stat')!;
+    stat.getBoundingClientRect = () => createRect(15, 25, 140, 40);
+
+    const attrs = buildEditTagAttributes(
+      {
+        itemId: 'record_42',
+        itemTypeId: 'post',
+        environment: 'staging'
+      },
+      'attrs'
+    );
+    Object.entries(attrs).forEach(([name, value]) => stat.setAttribute(name, value));
+
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    const dispose = enableDatoVisualEditing({
+      baseEditingUrl: 'https://acme.admin.datocms.com',
+      activate: 'always',
+      overlays: 'hover',
+      showBadge: true,
+      openInNewTab: false,
+      hoverLingerMs: 0
+    });
+
+    stat.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 50, clientY: 40 }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const overlayRoot = document.body.lastElementChild as HTMLElement;
+    expect(overlayRoot.style.transform).toBe('translate(7px, 17px)');
+
+    stat.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 50, clientY: 40 }));
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://acme.admin.datocms.com/environments/staging/editor/item_types/post/items/record_42/edit#fieldPath=metrics.views',
+      '_self'
     );
 
     dispose();

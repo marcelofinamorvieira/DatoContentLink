@@ -1,5 +1,43 @@
 # datocms-visual-editing
 
+## Quick Setup Guide
+
+1. **Install the package.**
+   ```bash
+   pnpm add datocms-visual-editing
+   ```
+
+2. **Fetch preview content with headers enabled.**
+   ```ts
+   import { withContentLinkHeaders } from 'datocms-visual-editing';
+
+   const fetchWithHeaders = withContentLinkHeaders(fetch);
+   const data = await fetchWithHeaders('https://graphql.datocms.com/', {
+     method: 'POST',
+     headers: {
+       Authorization: `Bearer ${process.env.DATO_CDA_TOKEN}`,
+       'Content-Type': 'application/json',
+       'X-Base-Editing-Url': 'https://acme.admin.datocms.com'
+     },
+     body: JSON.stringify({ query })
+   });
+   ```
+
+3. **Enable overlays in your preview bundle.**
+   ```ts
+   import { enableDatoVisualEditing } from 'datocms-visual-editing';
+
+   enableDatoVisualEditing({
+     baseEditingUrl: 'https://acme.admin.datocms.com',
+     activate: 'query',       // ?edit=1 turns it on by default
+     overlays: 'hover'
+   });
+   ```
+
+4. **(Optional) Mark up large cards.** Wrap card containers with `data-datocms-edit-target` so the whole card highlights, not just the text node.
+
+That’s it—hover or click the decoded content in your preview build to jump straight to the matching record inside DatoCMS.
+
 Click-to-edit overlays for content rendered from DatoCMS stega metadata—no Vercel toolbar required. Drop the tiny ES module into any preview build, decode the hidden payloads, and jump straight to the right record + field inside the DatoCMS editor.
 
 ```
@@ -13,12 +51,12 @@ DatoCMS GraphQL → content with hidden markers → overlay → Dato editor deep
 │  Your site   │ ─────────────────────────────────▶ │ DatoCMS CDA    │
 └──────┬───────┘                                     └──────┬────────┘
        │ cleaned text + @vercel/stega markers                │
-       ▼                                                      ▼
+       ▼                                                     ▼
 ┌──────────────┐   decode + map ids   ┌────────────────────┐  Deep link with
 │ Visual layer │ ───────────────────▶ │ enableDatoVisual…() │ ───────────────▶
 └──────┬───────┘   overlays + badge   └────────────────────┘  #fieldPath hash
-       │                                                      
-       ▼                                                      
+       │
+       ▼
    DatoCMS editor opens at the exact record + field
 ```
 
@@ -156,6 +194,73 @@ Frameworks such as Next.js strip the hidden stega markers shortly after hydratio
 - DatoCMS exposes `#fieldPath=` anchors in the editor—payloads from stega already include them for structured text spans and modular content. You can override or augment the path by decorating any ancestor with `data-datocms-field-path="blocks.0.title"`.
 - Keep overlay positioning accurate by avoiding large `letter-spacing` tweaks in preview modes. If you must, call `stripStega()` on the string before measuring text widths.
 
+## Non-text fields and complex text fields
+
+DatoCMS only appends visual-editing metadata to:
+
+- **Plain text fields** (single-line or multi-line without special validation).
+- **Structured Text** nodes (metadata rides on the final text span of the first block rendered).
+- **Image `alt` strings** returned with each upload.
+
+Numbers, booleans, slugs, coordinates, JSON blobs, counters, icons, SVGs, background images, etc., do **not** carry stega markers automatically. Use explicit edit tags to opt those elements into overlays:
+
+```html
+<!-- Minimal JSON tag -->
+<span
+  data-datocms-edit-info='{
+    "itemId": "123",
+    "itemTypeId": "product",
+    "fieldPath": "price"
+  }'
+  data-datocms-edit-target
+>
+  129.00
+</span>
+
+<!-- Split attributes (no inline JSON) -->
+<div
+  data-datocms-item-id="123"
+  data-datocms-item-type-id="product"
+  data-datocms-field-path="seo.title"
+  data-datocms-edit-target
+>
+  <svg aria-hidden="true" class="icon icon--edit"></svg>
+</div>
+```
+
+In React/JS you can generate the attributes with `buildEditTagAttributes`:
+
+```tsx
+import { buildEditTagAttributes } from 'datocms-visual-editing';
+
+export function Price({ itemId, amount }: { itemId: string; amount: number }) {
+  const attrs = buildEditTagAttributes({ itemId, itemTypeId: 'product', fieldPath: 'price' });
+  return (
+    <span {...attrs} data-datocms-edit-target>
+      {amount.toFixed(2)}
+    </span>
+  );
+}
+```
+
+`data-datocms-field-path` (if present) overrides any `fieldPath` provided via JSON or split attributes.
+When you call `buildEditTagAttributes(info, 'attrs')`, set `data-datocms-field-path` separately if you need a specific tab/anchor in the editor.
+
+### Images not showing overlays?
+
+1. **Ensure the `<img>` has a non-empty `alt`.** The CDA only appends stega markers to strings; if the alt is empty (or replaced), there’s nothing to decode.
+2. **Hydration cleanup.** Frameworks sometimes strip markers right after hydration. The observer keeps matches alive when `persistAfterClean` is `true` (default) as long as the visible `alt` text stays the same.
+3. **Lazy/zero-sized images.** When the image itself measures `0×0`, tag the wrapper with `data-datocms-edit-target`; geometry falls back to the container.
+4. **Background or decorative imagery.** Use explicit tags, e.g.:
+
+```html
+<figure
+  style="background-image:url(/hero.jpg)"
+  data-datocms-edit-info='{"itemId":"asset_987","fieldPath":"hero.alt"}'
+  data-datocms-edit-target
+></figure>
+```
+
 ## API surface
 
 | Export | Description |
@@ -164,6 +269,8 @@ Frameworks such as Next.js strip the hidden stega markers shortly after hydratio
 | `withContentLinkHeaders(fetch?)` | Wraps `fetch` to inject `X-Visual-Editing` + verify `X-Base-Editing-Url`. |
 | `decodeStega(text)` | Returns normalized `DecodedInfo` (`itemId`, `itemTypeId`, `fieldPath`, etc.) or `null`. |
 | `stripStega(text)` | Removes hidden characters so you can measure text without re-rendering. |
+| `buildEditTagAttributes(info, format?)` | Returns the `data-datocms-*` attrs needed to opt-in overlays for non-text elements. |
+| `applyEditTagAttributes(element, info, format?)` | Imperatively stamp the same attributes onto a DOM node. |
 
 ### `onResolveUrl` hook
 

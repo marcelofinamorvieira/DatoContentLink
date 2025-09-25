@@ -1,5 +1,6 @@
 import { decodeStega, stripStega } from '../decode/stega.js';
 import { DecodedInfo } from '../decode/types.js';
+import { readExplicitInfo, FIELD_PATH_ATTR, EXPLICIT_ATTRIBUTE_NAMES } from '../utils/attr.js';
 
 type CacheEntry = {
   info: DecodedInfo;
@@ -17,7 +18,15 @@ export type TextStegaMatch = {
   info: DecodedInfo;
 };
 
+export type ExplicitStegaMatch = {
+  element: Element;
+  info: DecodedInfo;
+};
+
 const NON_RENDERED_PARENTS = new Set(['SCRIPT', 'STYLE', 'TEMPLATE', 'NOSCRIPT']);
+
+const ATTRIBUTE_FILTER = ['alt', FIELD_PATH_ATTR, ...EXPLICIT_ATTRIBUTE_NAMES];
+const EXPLICIT_ATTRIBUTE_SET = new Set(EXPLICIT_ATTRIBUTE_NAMES);
 
 type StegaObserverOptions = {
   persistAfterClean: boolean;
@@ -32,6 +41,9 @@ export class StegaObserver {
   private readonly imageCache = new WeakMap<Element, CacheEntry>();
   private readonly imageSignatures = new WeakMap<Element, string>();
   private readonly imageMatched = new Set<Element>();
+  private readonly explicitCache = new WeakMap<Element, CacheEntry>();
+  private readonly explicitSignatures = new WeakMap<Element, string>();
+  private readonly explicitMatched = new Set<Element>();
 
   constructor(private readonly options: StegaObserverOptions = { persistAfterClean: true, debug: false }) {}
 
@@ -53,6 +65,7 @@ export class StegaObserver {
     }
     this.textMatched.clear();
     this.imageMatched.clear();
+    this.explicitMatched.clear();
   }
 
   getImageMatch(target: Element): ImageStegaMatch | null {
@@ -67,6 +80,23 @@ export class StegaObserver {
     return null;
   }
 
+  getImageMatchesWithin(root: Element): ImageStegaMatch[] {
+    const matches: ImageStegaMatch[] = [];
+    for (const element of this.imageMatched) {
+      if (!element.isConnected) {
+        this.clearImage(element);
+        continue;
+      }
+      if (root.contains(element)) {
+        const entry = this.imageCache.get(element);
+        if (entry) {
+          matches.push({ element, info: entry.info });
+        }
+      }
+    }
+    return matches;
+  }
+
   getTextMatchesWithin(root: Element): TextStegaMatch[] {
     const matches: TextStegaMatch[] = [];
     for (const node of this.textMatched) {
@@ -78,6 +108,35 @@ export class StegaObserver {
         const entry = this.textCache.get(node);
         if (entry) {
           matches.push({ node, info: entry.info });
+        }
+      }
+    }
+    return matches;
+  }
+
+  getExplicitMatch(target: Element): ExplicitStegaMatch | null {
+    let current: Element | null = target;
+    while (current) {
+      const entry = this.explicitCache.get(current);
+      if (entry) {
+        return { element: current, info: entry.info };
+      }
+      current = current.parentElement;
+    }
+    return null;
+  }
+
+  getExplicitMatchesWithin(root: Element): ExplicitStegaMatch[] {
+    const matches: ExplicitStegaMatch[] = [];
+    for (const element of this.explicitMatched) {
+      if (!element.isConnected) {
+        this.clearExplicit(element);
+        continue;
+      }
+      if (root.contains(element)) {
+        const entry = this.explicitCache.get(element);
+        if (entry) {
+          matches.push({ element, info: entry.info });
         }
       }
     }
@@ -114,6 +173,12 @@ export class StegaObserver {
           if (mutation.target instanceof HTMLImageElement && mutation.attributeName === 'alt') {
             this.processImage(mutation.target);
           }
+          if (mutation.target instanceof Element) {
+            const name = mutation.attributeName ?? '';
+            if (name === FIELD_PATH_ATTR || EXPLICIT_ATTRIBUTE_SET.has(name)) {
+              this.processExplicitElement(mutation.target);
+            }
+          }
         }
       }
     });
@@ -123,7 +188,7 @@ export class StegaObserver {
       childList: true,
       characterData: true,
       attributes: true,
-      attributeFilter: ['alt', 'data-datocms-field-path']
+      attributeFilter: ATTRIBUTE_FILTER
     });
   }
 
@@ -142,6 +207,7 @@ export class StegaObserver {
     if (root instanceof HTMLImageElement) {
       this.clearImage(root);
     }
+    this.clearExplicit(root);
 
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
     let current: Node | null = walker.currentNode;
@@ -150,6 +216,9 @@ export class StegaObserver {
         this.clearTextNode(current);
       } else if (current instanceof HTMLImageElement) {
         this.clearImage(current);
+        this.clearExplicit(current);
+      } else if (current instanceof Element) {
+        this.clearExplicit(current);
       }
       current = walker.nextNode();
     }
@@ -160,6 +229,9 @@ export class StegaObserver {
       this.processTextNode(node);
     } else if (node instanceof HTMLImageElement) {
       this.processImage(node);
+      this.processExplicitElement(node);
+    } else if (node instanceof Element) {
+      this.processExplicitElement(node);
     }
   }
 
@@ -256,6 +328,21 @@ export class StegaObserver {
       return;
     }
 
+    const explicitInfo = readExplicitInfo(element);
+    if (explicitInfo) {
+      const signature = `attr:${explicitInfo.editUrl ?? explicitInfo.itemId}`;
+      this.imageCache.set(element, { info: explicitInfo, signature, cleaned: alt });
+      this.imageSignatures.set(element, signature);
+      this.imageMatched.add(element);
+      if (this.options.debug) {
+        console.log('[datocms-visual-editing][debug] attached by attributes (image)', {
+          element,
+          info: explicitInfo
+        });
+      }
+      return;
+    }
+
     this.clearImage(element);
   }
 
@@ -270,4 +357,53 @@ export class StegaObserver {
     this.imageSignatures.delete(element);
     this.imageMatched.delete(element);
   }
+
+  private processExplicitElement(element: Element): void {
+    const signature = explicitSignature(element);
+    if (!signature) {
+      this.clearExplicit(element);
+      return;
+    }
+
+    if (this.explicitSignatures.get(element) === signature) {
+      if (this.explicitCache.has(element)) {
+        this.explicitMatched.add(element);
+      }
+      return;
+    }
+
+    const info = readExplicitInfo(element);
+    if (!info) {
+      this.clearExplicit(element);
+      return;
+    }
+
+    this.explicitCache.set(element, { info, signature, cleaned: '' });
+    this.explicitSignatures.set(element, signature);
+    this.explicitMatched.add(element);
+  }
+
+  private clearExplicit(element: Element): void {
+    this.explicitCache.delete(element);
+    this.explicitSignatures.delete(element);
+    this.explicitMatched.delete(element);
+  }
+}
+
+function explicitSignature(element: Element): string | null {
+  const parts: string[] = [];
+  for (const name of EXPLICIT_ATTRIBUTE_NAMES) {
+    const value = element.getAttribute(name);
+    if (value != null && value.trim().length > 0) {
+      parts.push(`${name}:${value}`);
+    }
+  }
+  if (parts.length === 0) {
+    return null;
+  }
+  const fieldPath = element.getAttribute(FIELD_PATH_ATTR);
+  if (fieldPath != null && fieldPath.trim().length > 0) {
+    parts.push(`${FIELD_PATH_ATTR}:${fieldPath}`);
+  }
+  return parts.join('|');
 }
