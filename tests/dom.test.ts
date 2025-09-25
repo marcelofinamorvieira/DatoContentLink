@@ -147,14 +147,15 @@ describe('enableDatoVisualEditing', () => {
       activate: 'always',
       overlays: 'hover',
       showBadge: true,
-      openInNewTab: false
+      openInNewTab: false,
+      hoverLingerMs: 0
     });
 
     title.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 80, clientY: 60 }));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     const overlayRoot = document.body.lastElementChild as HTMLElement;
-    expect(overlayRoot.style.transform).toBe('translate(40px, 50px)');
+    expect(overlayRoot.style.transform).toBe('translate(2px, 12px)');
 
     title.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 80, clientY: 60 }));
     expect(openSpy).toHaveBeenCalledWith(
@@ -193,6 +194,7 @@ describe('enableDatoVisualEditing', () => {
       overlays: 'hover',
       showBadge: false,
       openInNewTab: true,
+      hoverLingerMs: 0,
     });
 
     subhead.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 10, clientY: 10 }));
@@ -227,7 +229,8 @@ describe('enableDatoVisualEditing', () => {
       overlays: 'hover',
       showBadge: false,
       openInNewTab: true,
-      debug: true
+      debug: true,
+      hoverLingerMs: 0
     });
 
     snippet.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 30, clientY: 9 }));
@@ -262,7 +265,8 @@ describe('enableDatoVisualEditing', () => {
       activate: 'always',
       overlays: 'hover',
       showBadge: false,
-      openInNewTab: true
+      openInNewTab: true,
+      hoverLingerMs: 0
     });
 
     img.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 20, clientY: 20 }));
@@ -294,8 +298,10 @@ describe('enableDatoVisualEditing', () => {
       </div>
     `;
 
+    const card = document.getElementById('card')!;
     const title = document.getElementById('title')!;
     const textNode = title.firstChild as Text;
+    card.getBoundingClientRect = () => createRect(10, 20, 200, 60);
     title.getBoundingClientRect = () => createRect(40, 50, 100, 20);
     textRectMap.set(textNode, [createRect(40, 50, 100, 20)]);
 
@@ -307,14 +313,15 @@ describe('enableDatoVisualEditing', () => {
       activate: 'always',
       overlays: 'hover',
       showBadge: true,
-      openInNewTab: false
+      openInNewTab: false,
+      hoverLingerMs: 0
     });
 
     title.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 80, clientY: 60 }));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     let overlayRoot = document.body.lastElementChild as HTMLElement;
-    expect(overlayRoot.style.transform).toBe('translate(40px, 50px)');
+    expect(overlayRoot.style.transform).toBe('translate(2px, 12px)');
 
     textNode.textContent = cleaned;
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -323,7 +330,7 @@ describe('enableDatoVisualEditing', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     overlayRoot = document.body.lastElementChild as HTMLElement;
-    expect(overlayRoot.style.transform).toBe('translate(40px, 50px)');
+    expect(overlayRoot.style.transform).toBe('translate(2px, 12px)');
 
     title.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 80, clientY: 60 }));
     expect(openSpy).toHaveBeenCalledWith(
@@ -359,14 +366,15 @@ describe('enableDatoVisualEditing', () => {
       overlays: 'hover',
       showBadge: true,
       openInNewTab: false,
-      persistAfterClean: false
+      persistAfterClean: false,
+      hoverLingerMs: 0
     });
 
     title.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 80, clientY: 60 }));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     let overlayRoot = document.body.lastElementChild as HTMLElement;
-    expect(overlayRoot.style.transform).toBe('translate(40px, 50px)');
+    expect(overlayRoot.style.transform).toBe('translate(32px, 42px)');
 
     textNode.textContent = cleaned;
     await new Promise((resolve) => setTimeout(resolve, 0));

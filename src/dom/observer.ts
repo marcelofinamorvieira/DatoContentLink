@@ -192,6 +192,7 @@ export class StegaObserver {
     }
 
     if (this.options.persistAfterClean && previousEntry && value === previousEntry.cleaned) {
+      // Next.js dev/toolbar often strips markers post-hydration; keep the match if the cleaned text is unchanged.
       const signature = `text:clean:${value}`;
       if (this.textSignatures.get(node) === signature) {
         this.textMatched.add(node);
@@ -236,6 +237,7 @@ export class StegaObserver {
     }
 
     if (this.options.persistAfterClean && previousEntry && alt === previousEntry.cleaned) {
+      // Image alts can be sanitized too; reuse the cached info when the visible string stays the same.
       const signature = `alt:clean:${alt}`;
       if (this.imageSignatures.get(element) === signature) {
         this.imageMatched.add(element);

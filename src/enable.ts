@@ -1,10 +1,18 @@
 import { StegaObserver, type TextStegaMatch, type ImageStegaMatch } from './dom/observer.js';
 import { OverlayManager } from './dom/overlays.js';
-import { measureElement, rectsForTextNode, pointInBox, type OverlayBoxes } from './dom/measure.js';
+import {
+  measureElement,
+  rectsForTextNode,
+  pointInBox,
+  inflateBoxes,
+  ensureMinSizeForBoxes,
+  type OverlayBoxes,
+  type EdgePadding
+} from './dom/measure.js';
 import { buildDatoDeepLink } from './link/buildDatoDeepLink.js';
 import { normalizeFieldPath } from './link/fieldPath.js';
 import { DecodedInfo } from './decode/types.js';
-import { resolveHighlightContainer, TargetAttribute } from './utils/attr.js';
+import { resolveHighlightContainer, hasDatoTarget, TargetAttribute } from './utils/attr.js';
 import { isElement, isHTMLElement } from './utils/guards.js';
 import { rafThrottle } from './utils/throttle.js';
 
@@ -22,6 +30,10 @@ export type EnableOptions = {
   onBeforeOpen?: (url: string, ev: MouseEvent) => boolean | void;
   debug?: boolean;
   persistAfterClean?: boolean;
+  // Interaction tuning knobs so overlays match the mental “card” target.
+  hitPadding?: EdgePadding;
+  minHitSize?: number | { width: number; height?: number };
+  hoverLingerMs?: number;
 };
 
 type ResolvedMatch = {
@@ -33,6 +45,12 @@ type ResolvedMatch = {
   debugNode?: Text | HTMLImageElement;
 };
 
+type TextMatchContext = {
+  rects: OverlayBoxes;
+  cursorElement: Element | null;
+  fieldPathElement: Element | null;
+};
+
 const DEFAULTS = {
   activate: 'query' as const,
   activationQueryParam: 'edit',
@@ -42,7 +60,10 @@ const DEFAULTS = {
   targetAttribute: 'data-datocms-edit-target' as const,
   openInNewTab: true,
   debug: false,
-  persistAfterClean: true
+  persistAfterClean: true,
+  hitPadding: 8 as EdgePadding,
+  minHitSize: 0,
+  hoverLingerMs: 100
 };
 
 const FIELD_PATH_ATTR = 'data-datocms-field-path';
@@ -145,6 +166,9 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
     openInNewTab: boolean;
     debug: boolean;
     persistAfterClean: boolean;
+    hitPadding: EdgePadding;
+    minHitSize: number | { width: number; height?: number };
+    hoverLingerMs: number;
   };
 
   const baseEditingUrl = normalizeBaseUrl(options.baseEditingUrl);
@@ -174,6 +198,9 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
   let currentMatch: ResolvedMatch | null = null;
   const cursorMemory = new WeakMap<HTMLElement, string | null>();
   let activeCursorElement: HTMLElement | null = null;
+  // Short hover linger prevents flicker when the pointer skims padded edges.
+  const hoverLingerDelay = Math.max(0, options.hoverLingerMs ?? 0);
+  let hoverClearTimer: number | null = null;
 
   const updateOverlayPosition = rafThrottle(() => {
     if (!currentMatch) {
@@ -187,24 +214,48 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
     }
   });
 
-  const onPointerOver = (event: PointerEvent) => {
+  // Re-evaluate matches on pointer move so overlays appear while gliding inside a card.
+  const updateMatchFromMove = rafThrottle((event: PointerEvent) => {
     const match = resolvePointerMatch(event);
     if (match) {
+      cancelHoverClear();
       setCurrentMatch(match);
     } else {
-      clearCurrentMatch();
+      scheduleHoverClear();
     }
+  });
+
+  const onPointerOver = (event: PointerEvent) => {
+    if (event.pointerType === 'touch') {
+      return;
+    }
+    const match = resolvePointerMatch(event);
+    if (match) {
+      cancelHoverClear();
+      setCurrentMatch(match);
+    } else {
+      scheduleHoverClear();
+    }
+  };
+
+  const onPointerMove = (event: PointerEvent) => {
+    if (event.pointerType === 'touch') {
+      return;
+    }
+    updateMatchFromMove(event);
   };
 
   const onFocusIn = (event: FocusEvent) => {
     const match = resolveFocusMatch(event.target);
     if (match) {
+      cancelHoverClear();
       setCurrentMatch(match);
     }
   };
 
   const onFocusOut = (event: FocusEvent) => {
     if (!isElement(event.relatedTarget)) {
+      cancelHoverClear();
       clearCurrentMatch();
     }
   };
@@ -214,6 +265,8 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
     if (!match) {
       return;
     }
+
+    cancelHoverClear();
 
     const shouldPrevent = openDatoLink(match, event);
     if (shouldPrevent !== false) {
@@ -240,6 +293,7 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
   };
 
   document.addEventListener('pointerover', onPointerOver, true);
+  document.addEventListener('pointermove', onPointerMove, true);
   document.addEventListener('focusin', onFocusIn, true);
   document.addEventListener('focusout', onFocusOut, true);
   document.addEventListener('click', onClick, true);
@@ -279,9 +333,9 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
 
     const candidates = observer.getTextMatchesWithin(target);
     for (const candidate of candidates) {
-      const rects = rectsForTextNode(candidate.node);
-      if (rects.length) {
-        return createTextMatch(candidate, rects);
+      const context = computeTextMatchContext(candidate);
+      if (context.rects.length) {
+        return createTextMatch(candidate, context);
       }
     }
 
@@ -313,12 +367,12 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
         continue;
       }
       for (const match of matches) {
-        const rects = rectsForTextNode(match.node);
-        if (!rects.length) {
+        const context = computeTextMatchContext(match);
+        if (!context.rects.length) {
           continue;
         }
-        if (rects.some((rect) => pointInBox(pageX, pageY, rect))) {
-          return createTextMatch(match, rects);
+        if (context.rects.some((rect) => pointInBox(pageX, pageY, rect))) {
+          return createTextMatch(match, context);
         }
       }
     }
@@ -326,25 +380,28 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
     return null;
   }
 
-  function createTextMatch(match: TextStegaMatch, initialRects?: OverlayBoxes): ResolvedMatch | null {
-    const parent = match.node.parentElement;
-    const targetAttr = options.targetAttribute ?? DEFAULTS.targetAttribute;
-    const highlightContainer = parent ? resolveHighlightContainer(parent, targetAttr) : null;
-    const fieldPath = findFieldPath(highlightContainer ?? parent);
+  function createTextMatch(match: TextStegaMatch, context?: TextMatchContext): ResolvedMatch | null {
+    const ctx = context ?? computeTextMatchContext(match);
+    if (!ctx.rects.length) {
+      return null;
+    }
+
+    const fieldPathElement = ctx.fieldPathElement ?? ctx.cursorElement ?? match.node.parentElement;
+    const fieldPath = findFieldPath(fieldPathElement ?? null) ?? findFieldPath(match.node.parentElement);
     const infoWithField = withFieldPath(match.info, fieldPath);
     const url = resolveUrl(infoWithField);
     if (!url) {
       return null;
     }
 
-    const getRects = () => rectsForTextNode(match.node);
+    const getRects = () => computeTextMatchContext(match).rects;
 
     return {
       info: infoWithField,
       url,
       getRects,
-      cursorElement: parent,
-      initialRects,
+      cursorElement: ctx.cursorElement ?? match.node.parentElement,
+      initialRects: ctx.rects,
       debugNode: match.node
     };
   }
@@ -360,7 +417,8 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
 
     const getRects = () => {
       const box = measureElement(element);
-      return box ? [box] : [];
+      const rects = box ? [box] : [];
+      return transformRects(rects);
     };
 
     const initialRects = getRects();
@@ -372,6 +430,62 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
       cursorElement: element,
       initialRects,
       debugNode: element instanceof HTMLImageElement ? element : undefined
+    };
+  }
+
+  function normalizeMinHitSizeOption(value: number | { width: number; height?: number }): { width: number; height: number } {
+    if (typeof value === 'number') {
+      const size = Math.max(0, value);
+      return { width: size, height: size };
+    }
+    const width = Math.max(0, value.width ?? 0);
+    const height = Math.max(0, value.height ?? width);
+    return { width, height };
+  }
+
+  function transformRects(rects: OverlayBoxes): OverlayBoxes {
+    if (!rects.length) {
+      return rects;
+    }
+
+    // Inflate and normalize geometry so hover/click targets match “card” intent, not raw glyph ink.
+    let transformed = inflateBoxes(rects, options.hitPadding);
+    const minSize = normalizeMinHitSizeOption(options.minHitSize);
+    if (minSize.width > 0 || minSize.height > 0) {
+      transformed = ensureMinSizeForBoxes(transformed, minSize.width, minSize.height);
+    }
+    return transformed;
+  }
+
+  function computeTextMatchContext(match: TextStegaMatch): TextMatchContext {
+    const parent = match.node.parentElement;
+    const targetAttr = options.targetAttribute ?? DEFAULTS.targetAttribute;
+    const highlightContainer = parent ? resolveHighlightContainer(parent, targetAttr) : null;
+
+    let rects: OverlayBoxes = [];
+    let cursorElement: Element | null = parent;
+    let fieldPathElement: Element | null = highlightContainer ?? parent;
+
+    if (highlightContainer && hasDatoTarget(highlightContainer)) {
+      const containerBox = measureElement(highlightContainer);
+      if (containerBox) {
+        rects = [containerBox];
+        cursorElement = highlightContainer;
+        fieldPathElement = highlightContainer;
+        // Prefer container geometry when authors opt in via data attribute.
+      }
+    }
+
+    if (!rects.length) {
+      rects = rectsForTextNode(match.node);
+    }
+
+    rects = transformRects(rects);
+
+    return {
+      rects,
+      cursorElement,
+      fieldPathElement
     };
   }
 
@@ -425,6 +539,7 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
   }
 
   function setCurrentMatch(match: ResolvedMatch): void {
+    cancelHoverClear();
     currentMatch = match;
     if (match.cursorElement) {
       applyPointerCursor(match.cursorElement);
@@ -441,9 +556,36 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
   }
 
   function clearCurrentMatch(): void {
+    cancelHoverClear();
+    performClear();
+  }
+
+  function performClear(): void {
     currentMatch = null;
     overlay.hide();
     restorePointerCursor();
+  }
+
+  function scheduleHoverClear(): void {
+    if (!currentMatch) {
+      return;
+    }
+    if (hoverLingerDelay === 0) {
+      performClear();
+      return;
+    }
+    cancelHoverClear();
+    hoverClearTimer = window.setTimeout(() => {
+      hoverClearTimer = null;
+      performClear();
+    }, hoverLingerDelay);
+  }
+
+  function cancelHoverClear(): void {
+    if (hoverClearTimer != null) {
+      clearTimeout(hoverClearTimer);
+      hoverClearTimer = null;
+    }
   }
 
   function openDatoLink(match: ResolvedMatch, event: MouseEvent): boolean | void {
@@ -475,12 +617,15 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
     restorePointerCursor();
     updateOverlayPosition.cancel();
     document.removeEventListener('pointerover', onPointerOver, true);
+    document.removeEventListener('pointermove', onPointerMove, true);
     document.removeEventListener('focusin', onFocusIn, true);
     document.removeEventListener('focusout', onFocusOut, true);
     document.removeEventListener('click', onClick, true);
     document.removeEventListener('keydown', onKeyDown, true);
     window.removeEventListener('scroll', updateOverlayPosition, true);
     window.removeEventListener('resize', updateOverlayPosition, true);
+    updateMatchFromMove.cancel();
+    cancelHoverClear();
   };
 
   return dispose;

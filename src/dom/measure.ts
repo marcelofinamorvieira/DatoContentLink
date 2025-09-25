@@ -7,6 +7,18 @@ export type OverlayBox = {
 
 export type OverlayBoxes = OverlayBox[];
 
+// Padding/min-size helpers keep hover targets forgiving without mutating DOM styles.
+export type EdgePadding =
+  | number
+  | {
+      x?: number;
+      y?: number;
+      top?: number;
+      right?: number;
+      bottom?: number;
+      left?: number;
+    };
+
 function toOverlayBox(rect: DOMRect): OverlayBox {
   return {
     top: rect.top + window.scrollY,
@@ -73,4 +85,68 @@ export function unionBox(rects: OverlayBoxes): OverlayBox | null {
 
 export function pointInBox(x: number, y: number, box: OverlayBox): boolean {
   return x >= box.left && x <= box.left + box.width && y >= box.top && y <= box.top + box.height;
+}
+
+function normalizePadding(padding: EdgePadding): { top: number; right: number; bottom: number; left: number } {
+  if (typeof padding === 'number') {
+    const value = Math.max(0, padding);
+    return { top: value, right: value, bottom: value, left: value };
+  }
+
+  const x = Math.max(0, padding.x ?? 0);
+  const y = Math.max(0, padding.y ?? 0);
+  return {
+    top: Math.max(0, padding.top ?? y),
+    right: Math.max(0, padding.right ?? x),
+    bottom: Math.max(0, padding.bottom ?? y),
+    left: Math.max(0, padding.left ?? x)
+  };
+}
+
+export function inflateBox(box: OverlayBox, padding: EdgePadding): OverlayBox {
+  // Expand both axes so near-miss hovers still register as intentional.
+  const { top, right, bottom, left } = normalizePadding(padding);
+  return {
+    top: box.top - top,
+    left: box.left - left,
+    width: Math.max(0, box.width + left + right),
+    height: Math.max(0, box.height + top + bottom)
+  };
+}
+
+export function inflateBoxes(rects: OverlayBoxes, padding: EdgePadding): OverlayBoxes {
+  if (!rects.length) {
+    return rects;
+  }
+  return rects.map((rect) => inflateBox(rect, padding));
+}
+
+export function ensureMinSize(box: OverlayBox, width: number, height = width): OverlayBox {
+  // Guarantee a minimum hit size (useful for short glyph runs on large screens).
+  const normalizedWidth = Math.max(0, width);
+  const normalizedHeight = Math.max(0, height);
+  if (normalizedWidth === 0 && normalizedHeight === 0) {
+    return box;
+  }
+
+  const deltaWidth = Math.max(0, normalizedWidth - box.width);
+  const deltaHeight = Math.max(0, normalizedHeight - box.height);
+
+  if (deltaWidth === 0 && deltaHeight === 0) {
+    return box;
+  }
+
+  return {
+    top: box.top - deltaHeight / 2,
+    left: box.left - deltaWidth / 2,
+    width: box.width + deltaWidth,
+    height: box.height + deltaHeight
+  };
+}
+
+export function ensureMinSizeForBoxes(rects: OverlayBoxes, width: number, height = width): OverlayBoxes {
+  if (!rects.length) {
+    return rects;
+  }
+  return rects.map((rect) => ensureMinSize(rect, width, height));
 }

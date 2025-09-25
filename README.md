@@ -98,6 +98,9 @@ enableDatoVisualEditing({
   overlays: 'hover',           // 'always' | 'hover' | 'off'
   showBadge: true,             // tiny “Open in DatoCMS” badge
   targetAttribute: 'data-datocms-edit-target',
+  hitPadding: 8,               // forgive near-miss hovers (per side, px)
+  minHitSize: 20,              // optional minimum overlay size
+  hoverLingerMs: 120,          // keeps overlays visible briefly when skimming edges
   openInNewTab: true
 });
 ```
@@ -116,6 +119,9 @@ The initializer returns a disposer if you need to tear everything down (SPA rout
 ### Overlay controls
 
 - `targetAttribute`: Place `data-datocms-edit-target` on a container to highlight the entire card while still decoding stega hidden inside a child node. Existing `data-vercel-edit-target` hooks are honoured too.
+- `hitPadding` (default `8`): inflate hover/click geometry so the pointer can drift slightly outside the glyphs or image and still count as “on the card”. Accepts a number or `{ x, y }` / directional object.
+- `minHitSize` (default `0`): guarantee a minimum overlay size (useful for tiny inline strings). Pass a number or `{ width, height }`.
+- `hoverLingerMs` (default `100`): hold the overlay on screen for a short time when the pointer leaves a target to avoid flicker.
 - `showBadge`: toggle the badge. When enabled, it’s clickable + keyboard accessible (`Enter` / `Space`).
 - Respect for `prefers-reduced-motion` disables outline animations automatically.
 
@@ -132,6 +138,10 @@ enableDatoVisualEditing({
 ```
 
 Every overlay click outputs a `[datocms-visual-editing][debug] overlay click` entry with the resolved URL, decoded metadata, and the highlighted DOM node. Handy when verifying that your field paths, environments, and custom `onResolveUrl` logic line up with expectations.
+
+### Stega clean-up resilience
+
+Frameworks such as Next.js strip the hidden stega markers shortly after hydration. By default (`persistAfterClean: true`) the observer keeps the decoded metadata alive as long as the visible text/alt string stays the same, so overlays remain clickable even after the cleanup. Disable this behaviour by passing `persistAfterClean: false` if you prefer to require markers at all times.
 
 ### Deep link behaviour
 
