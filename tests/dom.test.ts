@@ -2,7 +2,10 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import * as stega from '@vercel/stega';
 import { enableDatoVisualEditing } from '../src/index.js';
 
-const { vercelStegaCombine } = stega;
+const { vercelStegaCombine, vercelStegaSplit } = stega;
+
+let textRectMap: WeakMap<Text, DOMRect[]>;
+let originalElementsFromPoint: (typeof document.elementsFromPoint) | undefined;
 
 const createRect = (x: number, y: number, width: number, height: number): DOMRect => ({
   x,
@@ -35,6 +38,8 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  textRectMap = new WeakMap();
+
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
     configurable: true,
@@ -55,10 +60,59 @@ beforeEach(() => {
     return 0;
   });
   vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
+
+  vi.spyOn(document, 'createRange').mockImplementation(() => {
+    let currentNode: Text | null = null;
+    return {
+      selectNodeContents(node: Node) {
+        currentNode = node instanceof Text ? node : null;
+      },
+      getClientRects() {
+        return currentNode ? textRectMap.get(currentNode) ?? [] : [];
+      },
+      getBoundingClientRect() {
+        const rects = currentNode ? textRectMap.get(currentNode) ?? [] : [];
+        return rects[0] ?? createRect(0, 0, 0, 0);
+      }
+    } as unknown as Range;
+  });
+
+  originalElementsFromPoint = typeof document.elementsFromPoint === 'function'
+    ? document.elementsFromPoint.bind(document)
+    : undefined;
+
+  Object.defineProperty(document, 'elementsFromPoint', {
+    configurable: true,
+    writable: true,
+    value: (clientX: number, clientY: number) => {
+      const elements: Element[] = [];
+      const all = document.querySelectorAll<HTMLElement>('*');
+      for (const element of all) {
+        if (typeof element.getBoundingClientRect !== 'function') {
+          continue;
+        }
+        const rect = element.getBoundingClientRect();
+        if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
+          elements.push(element);
+        }
+      }
+      return elements;
+    }
+  });
 });
 
 afterEach(() => {
   document.body.innerHTML = '';
+  if (originalElementsFromPoint) {
+    Object.defineProperty(document, 'elementsFromPoint', {
+      configurable: true,
+      writable: true,
+      value: originalElementsFromPoint
+    });
+  } else {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (document as any).elementsFromPoint;
+  }
   vi.restoreAllMocks();
 });
 
@@ -83,6 +137,7 @@ describe('enableDatoVisualEditing', () => {
 
     card.getBoundingClientRect = () => createRect(10, 20, 200, 60);
     title.getBoundingClientRect = () => createRect(40, 50, 100, 20);
+    textRectMap.set(title.firstChild as Text, [createRect(40, 50, 100, 20)]);
 
     const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
 
@@ -95,13 +150,13 @@ describe('enableDatoVisualEditing', () => {
       openInNewTab: false
     });
 
-    title.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+    title.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 80, clientY: 60 }));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     const overlayRoot = document.body.lastElementChild as HTMLElement;
-    expect(overlayRoot.style.transform).toBe('translate(10px, 20px)');
+    expect(overlayRoot.style.transform).toBe('translate(40px, 50px)');
 
-    title.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    title.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 80, clientY: 60 }));
     expect(openSpy).toHaveBeenCalledWith(
       'https://acme.admin.datocms.com/environments/preview/editor/item_types/article/items/123/edit#fieldPath=blocks.0.title',
       '_self'
@@ -109,9 +164,9 @@ describe('enableDatoVisualEditing', () => {
 
     openSpy.mockClear();
 
-    card.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+    card.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 80, clientY: 60 }));
     await new Promise((resolve) => setTimeout(resolve, 0));
-    card.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    card.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 80, clientY: 60 }));
     expect(openSpy).toHaveBeenCalledTimes(1);
 
     dispose();
@@ -128,6 +183,7 @@ describe('enableDatoVisualEditing', () => {
     document.body.innerHTML = `<p id="subhead">${encoded}</p>`;
     const subhead = document.getElementById('subhead')!;
     subhead.getBoundingClientRect = () => createRect(0, 0, 100, 20);
+    textRectMap.set(subhead.firstChild as Text, [createRect(0, 0, 100, 20)]);
 
     const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
 
@@ -139,9 +195,9 @@ describe('enableDatoVisualEditing', () => {
       openInNewTab: true,
     });
 
-    subhead.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+    subhead.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 10, clientY: 10 }));
     await new Promise((resolve) => setTimeout(resolve, 0));
-    subhead.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    subhead.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 }));
 
     expect(openSpy).toHaveBeenCalledWith(editUrl, '_blank', 'noopener');
 
@@ -160,6 +216,7 @@ describe('enableDatoVisualEditing', () => {
     document.body.innerHTML = `<p id="snippet">${encoded}</p>`;
     const snippet = document.getElementById('snippet')!;
     snippet.getBoundingClientRect = () => createRect(0, 0, 120, 18);
+    textRectMap.set(snippet.firstChild as Text, [createRect(0, 0, 120, 18)]);
 
     const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
@@ -173,9 +230,9 @@ describe('enableDatoVisualEditing', () => {
       debug: true
     });
 
-    snippet.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+    snippet.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 30, clientY: 9 }));
     await new Promise((resolve) => setTimeout(resolve, 0));
-    snippet.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    snippet.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 30, clientY: 9 }));
 
     expect(openSpy).toHaveBeenCalledOnce();
     expect(logSpy).toHaveBeenCalledWith(
@@ -208,15 +265,120 @@ describe('enableDatoVisualEditing', () => {
       openInNewTab: true
     });
 
-    img.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+    img.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 20, clientY: 20 }));
     await new Promise((resolve) => setTimeout(resolve, 0));
-    img.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    img.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 20, clientY: 20 }));
 
     expect(openSpy).toHaveBeenCalledWith(
       'https://acme.admin.datocms.com/editor/items/asset_1/edit#fieldPath=gallery.0.alt',
       '_blank',
       'noopener'
     );
+
+    dispose();
+  });
+
+  it('keeps matches after stega markers are stripped', async () => {
+    const payload = {
+      cms: 'datocms',
+      itemId: '123',
+      itemTypeId: 'article',
+      fieldPath: 'blocks.0.title'
+    };
+    const encoded = vercelStegaCombine('Headline', payload);
+    const cleaned = vercelStegaSplit(encoded).cleaned;
+
+    document.body.innerHTML = `
+      <div id="card" data-datocms-edit-target>
+        <span id="title">${encoded}</span>
+      </div>
+    `;
+
+    const title = document.getElementById('title')!;
+    const textNode = title.firstChild as Text;
+    title.getBoundingClientRect = () => createRect(40, 50, 100, 20);
+    textRectMap.set(textNode, [createRect(40, 50, 100, 20)]);
+
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    const dispose = enableDatoVisualEditing({
+      baseEditingUrl: 'https://acme.admin.datocms.com',
+      environment: 'preview',
+      activate: 'always',
+      overlays: 'hover',
+      showBadge: true,
+      openInNewTab: false
+    });
+
+    title.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 80, clientY: 60 }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    let overlayRoot = document.body.lastElementChild as HTMLElement;
+    expect(overlayRoot.style.transform).toBe('translate(40px, 50px)');
+
+    textNode.textContent = cleaned;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    title.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 80, clientY: 60 }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    overlayRoot = document.body.lastElementChild as HTMLElement;
+    expect(overlayRoot.style.transform).toBe('translate(40px, 50px)');
+
+    title.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 80, clientY: 60 }));
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://acme.admin.datocms.com/environments/preview/editor/item_types/article/items/123/edit#fieldPath=blocks.0.title',
+      '_self'
+    );
+
+    dispose();
+  });
+
+  it('drops matches when persistAfterClean is disabled', async () => {
+    const payload = {
+      cms: 'datocms',
+      itemId: '123',
+      itemTypeId: 'article',
+      fieldPath: 'blocks.0.title'
+    };
+    const encoded = vercelStegaCombine('Headline', payload);
+    const cleaned = vercelStegaSplit(encoded).cleaned;
+
+    document.body.innerHTML = `<span id="title">${encoded}</span>`;
+
+    const title = document.getElementById('title')!;
+    const textNode = title.firstChild as Text;
+    title.getBoundingClientRect = () => createRect(40, 50, 100, 20);
+    textRectMap.set(textNode, [createRect(40, 50, 100, 20)]);
+
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    const dispose = enableDatoVisualEditing({
+      baseEditingUrl: 'https://acme.admin.datocms.com',
+      activate: 'always',
+      overlays: 'hover',
+      showBadge: true,
+      openInNewTab: false,
+      persistAfterClean: false
+    });
+
+    title.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 80, clientY: 60 }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    let overlayRoot = document.body.lastElementChild as HTMLElement;
+    expect(overlayRoot.style.transform).toBe('translate(40px, 50px)');
+
+    textNode.textContent = cleaned;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    title.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 80, clientY: 60 }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    overlayRoot = document.body.lastElementChild as HTMLElement;
+    expect(overlayRoot.style.display).toBe('none');
+
+    title.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 80, clientY: 60 }));
+    expect(openSpy).not.toHaveBeenCalled();
 
     dispose();
   });

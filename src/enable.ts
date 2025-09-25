@@ -1,6 +1,6 @@
-import { StegaObserver } from './dom/observer.js';
+import { StegaObserver, type TextStegaMatch, type ImageStegaMatch } from './dom/observer.js';
 import { OverlayManager } from './dom/overlays.js';
-import { measureElement } from './dom/measure.js';
+import { measureElement, rectsForTextNode, pointInBox, type OverlayBoxes } from './dom/measure.js';
 import { buildDatoDeepLink } from './link/buildDatoDeepLink.js';
 import { normalizeFieldPath } from './link/fieldPath.js';
 import { DecodedInfo } from './decode/types.js';
@@ -21,12 +21,16 @@ export type EnableOptions = {
   openInNewTab?: boolean;
   onBeforeOpen?: (url: string, ev: MouseEvent) => boolean | void;
   debug?: boolean;
+  persistAfterClean?: boolean;
 };
 
 type ResolvedMatch = {
   info: DecodedInfo;
   url: string;
-  highlightElement: Element;
+  getRects: () => OverlayBoxes;
+  cursorElement: Element | null;
+  initialRects?: OverlayBoxes;
+  debugNode?: Text | HTMLImageElement;
 };
 
 const DEFAULTS = {
@@ -37,7 +41,8 @@ const DEFAULTS = {
   showBadge: true,
   targetAttribute: 'data-datocms-edit-target' as const,
   openInNewTab: true,
-  debug: false
+  debug: false,
+  persistAfterClean: true
 };
 
 const FIELD_PATH_ATTR = 'data-datocms-field-path';
@@ -139,6 +144,7 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
     targetAttribute: TargetAttribute;
     openInNewTab: boolean;
     debug: boolean;
+    persistAfterClean: boolean;
   };
 
   const baseEditingUrl = normalizeBaseUrl(options.baseEditingUrl);
@@ -147,7 +153,10 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
     return () => void 0;
   }
 
-  const observer = new StegaObserver();
+  const observer = new StegaObserver({
+    persistAfterClean: options.persistAfterClean ?? true,
+    debug: options.debug ?? DEFAULTS.debug
+  });
   observer.start();
 
   const overlay = new OverlayManager({
@@ -170,14 +179,16 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
     if (!currentMatch) {
       return;
     }
-    const box = measureElement(currentMatch.highlightElement);
-    if (box) {
-      overlay.update(box);
+    const rects = currentMatch.getRects();
+    if (rects.length) {
+      overlay.updateRects(rects);
+    } else {
+      overlay.hide();
     }
   });
 
   const onPointerOver = (event: PointerEvent) => {
-    const match = resolveMatch(event.target);
+    const match = resolvePointerMatch(event);
     if (match) {
       setCurrentMatch(match);
     } else {
@@ -186,7 +197,7 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
   };
 
   const onFocusIn = (event: FocusEvent) => {
-    const match = resolveMatch(event.target);
+    const match = resolveFocusMatch(event.target);
     if (match) {
       setCurrentMatch(match);
     }
@@ -199,7 +210,7 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
   };
 
   const onClick = (event: MouseEvent) => {
-    const match = resolveMatch(event.target);
+    const match = resolvePointerMatch(event);
     if (!match) {
       return;
     }
@@ -218,7 +229,7 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
     if (!isHTMLElement(active)) {
       return;
     }
-    const match = resolveMatch(active);
+    const match = resolveFocusMatch(active);
     if (!match) {
       return;
     }
@@ -236,35 +247,131 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
   window.addEventListener('scroll', updateOverlayPosition, true);
   window.addEventListener('resize', updateOverlayPosition, true);
 
-  function resolveMatch(target: EventTarget | null): ResolvedMatch | null {
+  function resolvePointerMatch(event: PointerEvent | MouseEvent): ResolvedMatch | null {
+    const target = event.target;
+
+    if (isElement(target)) {
+      const imageMatch = observer.getImageMatch(target);
+      if (imageMatch) {
+        const resolved = createImageMatch(imageMatch);
+        if (resolved) {
+          return resolved;
+        }
+      }
+    }
+
+    if (Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
+      return resolveTextMatchAtPoint(event.clientX, event.clientY);
+    }
+
+    return null;
+  }
+
+  function resolveFocusMatch(target: EventTarget | null): ResolvedMatch | null {
     if (!isElement(target)) {
       return null;
     }
 
-    const targetAttr = options.targetAttribute ?? DEFAULTS.targetAttribute;
-    const highlightElement = resolveHighlightContainer(target, targetAttr);
-
-    let match = observer.getMatch(target);
-    if (!match && highlightElement !== target) {
-      match = observer.findMatchWithin(highlightElement);
+    const imageMatch = observer.getImageMatch(target);
+    if (imageMatch) {
+      return createImageMatch(imageMatch);
     }
 
-    if (!match) {
+    const candidates = observer.getTextMatchesWithin(target);
+    for (const candidate of candidates) {
+      const rects = rectsForTextNode(candidate.node);
+      if (rects.length) {
+        return createTextMatch(candidate, rects);
+      }
+    }
+
+    return null;
+  }
+
+  function resolveTextMatchAtPoint(clientX: number, clientY: number): ResolvedMatch | null {
+    if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
       return null;
     }
 
-    const fieldPath = findFieldPath(highlightElement) ?? findFieldPath(match.element);
-    const infoWithField = withFieldPath(match.info, fieldPath);
+    const elements = typeof document.elementsFromPoint === 'function'
+      ? document.elementsFromPoint(clientX, clientY)
+      : [];
 
+    if (!elements.length) {
+      return null;
+    }
+
+    const pageX = clientX + window.scrollX;
+    const pageY = clientY + window.scrollY;
+
+    for (const element of elements) {
+      if (!(element instanceof Element)) {
+        continue;
+      }
+      const matches = observer.getTextMatchesWithin(element);
+      if (!matches.length) {
+        continue;
+      }
+      for (const match of matches) {
+        const rects = rectsForTextNode(match.node);
+        if (!rects.length) {
+          continue;
+        }
+        if (rects.some((rect) => pointInBox(pageX, pageY, rect))) {
+          return createTextMatch(match, rects);
+        }
+      }
+    }
+
+    return null;
+  }
+
+  function createTextMatch(match: TextStegaMatch, initialRects?: OverlayBoxes): ResolvedMatch | null {
+    const parent = match.node.parentElement;
+    const targetAttr = options.targetAttribute ?? DEFAULTS.targetAttribute;
+    const highlightContainer = parent ? resolveHighlightContainer(parent, targetAttr) : null;
+    const fieldPath = findFieldPath(highlightContainer ?? parent);
+    const infoWithField = withFieldPath(match.info, fieldPath);
     const url = resolveUrl(infoWithField);
     if (!url) {
       return null;
     }
 
+    const getRects = () => rectsForTextNode(match.node);
+
     return {
       info: infoWithField,
       url,
-      highlightElement
+      getRects,
+      cursorElement: parent,
+      initialRects,
+      debugNode: match.node
+    };
+  }
+
+  function createImageMatch(match: ImageStegaMatch): ResolvedMatch | null {
+    const element = match.element;
+    const fieldPath = findFieldPath(element);
+    const infoWithField = withFieldPath(match.info, fieldPath);
+    const url = resolveUrl(infoWithField);
+    if (!url) {
+      return null;
+    }
+
+    const getRects = () => {
+      const box = measureElement(element);
+      return box ? [box] : [];
+    };
+
+    const initialRects = getRects();
+
+    return {
+      info: infoWithField,
+      url,
+      getRects,
+      cursorElement: element,
+      initialRects,
+      debugNode: element instanceof HTMLImageElement ? element : undefined
     };
   }
 
@@ -319,10 +426,17 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
 
   function setCurrentMatch(match: ResolvedMatch): void {
     currentMatch = match;
-    applyPointerCursor(match.highlightElement);
-    const box = measureElement(match.highlightElement);
-    if (box) {
-      overlay.highlight(box);
+    if (match.cursorElement) {
+      applyPointerCursor(match.cursorElement);
+    } else {
+      restorePointerCursor();
+    }
+
+    const rects = match.initialRects && match.initialRects.length ? match.initialRects : match.getRects();
+    if (rects.length) {
+      overlay.highlightRects(rects);
+    } else {
+      overlay.hide();
     }
   }
 
@@ -338,7 +452,7 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
         eventType: event.type,
         url: match.url,
         info: match.info,
-        element: match.highlightElement
+        element: match.cursorElement ?? match.debugNode ?? null
       });
     }
 

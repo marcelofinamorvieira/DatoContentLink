@@ -1,4 +1,4 @@
-import { OverlayBox } from './measure.js';
+import { OverlayBox, OverlayBoxes, unionBox } from './measure.js';
 import { rafThrottle } from '../utils/throttle.js';
 
 type OverlayMode = 'hover' | 'always' | 'off';
@@ -24,10 +24,11 @@ export class OverlayManager {
   private readonly showBadge: boolean;
   private readonly callbacks: OverlayCallbacks;
   private root: HTMLDivElement | null = null;
-  private outline: HTMLDivElement | null = null;
+  private segmentsRoot: HTMLDivElement | null = null;
+  private segments: HTMLDivElement[] = [];
   private isVisible = false;
-  private lastBox: OverlayBox | null = null;
-  private rafUpdater = rafThrottle((box: OverlayBox) => this.updateStyles(box));
+  private lastSignature: string | null = null;
+  private rafUpdater = rafThrottle((rects: OverlayBoxes) => this.render(rects));
 
   constructor(options: OverlayOptions) {
     this.mode = options.mode;
@@ -48,19 +49,12 @@ export class OverlayManager {
     root.style.pointerEvents = 'none';
     root.style.display = 'none';
 
-    const outline = document.createElement('div');
-    outline.setAttribute('role', 'presentation');
-    outline.style.position = 'absolute';
-    outline.style.borderRadius = '8px';
-    outline.style.border = '2px solid #ff7751';
-    outline.style.boxSizing = 'border-box';
-    outline.style.background = 'rgba(255,119,81,0.12)';
-    outline.style.pointerEvents = 'none';
-    if (!prefersReducedMotion()) {
-      outline.style.transition = 'transform 120ms ease, width 120ms ease, height 120ms ease, opacity 120ms ease';
-    }
-
-    root.appendChild(outline);
+    const segmentsRoot = document.createElement('div');
+    segmentsRoot.style.position = 'absolute';
+    segmentsRoot.style.top = '0';
+    segmentsRoot.style.left = '0';
+    segmentsRoot.style.pointerEvents = 'none';
+    root.appendChild(segmentsRoot);
 
     if (this.showBadge) {
       const badge = document.createElement('button');
@@ -81,7 +75,6 @@ export class OverlayManager {
       badge.style.color = '#ffffff';
       badge.style.boxShadow = '0 2px 6px rgba(0,0,0,0.2)';
       badge.style.cursor = 'pointer';
-      badge.style.pointerEvents = 'auto';
 
       badge.addEventListener('click', (event) => {
         event.preventDefault();
@@ -101,21 +94,30 @@ export class OverlayManager {
 
     document.body.appendChild(root);
     this.root = root;
-    this.outline = outline;
+    this.segmentsRoot = segmentsRoot;
   }
 
   highlight(box: OverlayBox): void {
+    this.highlightRects([box]);
+  }
+
+  highlightRects(rects: OverlayBoxes): void {
     if (this.mode === 'off') {
       return;
     }
     this.ensureDom();
-    if (!this.root || !this.outline) {
+    if (!this.root || !this.segmentsRoot) {
+      return;
+    }
+
+    if (!rects.length) {
+      this.hide();
       return;
     }
 
     this.isVisible = true;
     this.root.style.display = 'block';
-    this.rafUpdater(box);
+    this.rafUpdater(rects);
   }
 
   hide(): void {
@@ -123,12 +125,10 @@ export class OverlayManager {
       return;
     }
     this.rafUpdater.cancel();
-    if (this.root) {
-      if (this.mode === 'hover') {
-        this.root.style.display = 'none';
-        this.isVisible = false;
-      }
+    if (this.root && this.mode === 'hover') {
+      this.root.style.display = 'none';
     }
+    this.isVisible = false;
   }
 
   isActive(): boolean {
@@ -136,13 +136,14 @@ export class OverlayManager {
   }
 
   update(box: OverlayBox): void {
-    if (this.mode === 'off') {
+    this.updateRects([box]);
+  }
+
+  updateRects(rects: OverlayBoxes): void {
+    if (this.mode === 'off' || !this.isVisible) {
       return;
     }
-    if (!this.isVisible) {
-      return;
-    }
-    this.rafUpdater(box);
+    this.rafUpdater(rects);
   }
 
   dispose(): void {
@@ -151,26 +152,75 @@ export class OverlayManager {
       this.root.remove();
     }
     this.root = null;
-    this.outline = null;
+    this.segmentsRoot = null;
+    this.segments = [];
     this.isVisible = false;
-    this.lastBox = null;
+    this.lastSignature = null;
   }
 
-  private updateStyles(box: OverlayBox): void {
-    if (!this.root || !this.outline) {
+  private ensureSegmentCount(count: number): void {
+    if (!this.segmentsRoot) {
       return;
     }
-    if (this.lastBox &&
-      this.lastBox.top === box.top &&
-      this.lastBox.left === box.left &&
-      this.lastBox.width === box.width &&
-      this.lastBox.height === box.height) {
+    while (this.segments.length < count) {
+      const segment = document.createElement('div');
+      segment.setAttribute('role', 'presentation');
+      segment.style.position = 'absolute';
+      segment.style.borderRadius = '8px';
+      segment.style.border = '2px solid #ff7751';
+      segment.style.boxSizing = 'border-box';
+      segment.style.background = 'rgba(255,119,81,0.12)';
+      segment.style.pointerEvents = 'none';
+      if (!prefersReducedMotion()) {
+        segment.style.transition = 'transform 120ms ease, width 120ms ease, height 120ms ease, opacity 120ms ease';
+      }
+      this.segmentsRoot.appendChild(segment);
+      this.segments.push(segment);
+    }
+  }
+
+  private render(rects: OverlayBoxes): void {
+    if (!this.root || !this.segmentsRoot) {
       return;
     }
 
-    this.lastBox = box;
-    this.root.style.transform = `translate(${box.left}px, ${box.top}px)`;
-    this.outline.style.width = `${Math.max(0, box.width)}px`;
-    this.outline.style.height = `${Math.max(0, box.height)}px`;
+    const union = unionBox(rects);
+    if (!union) {
+      this.hide();
+      return;
+    }
+
+    const signature = rects.map((rect) => `${rect.top}:${rect.left}:${rect.width}:${rect.height}`).join('|');
+    if (this.lastSignature === signature) {
+      return;
+    }
+    this.lastSignature = signature;
+
+    this.root.style.transform = `translate(${union.left}px, ${union.top}px)`;
+    this.root.style.width = `${Math.max(0, union.width)}px`;
+    this.root.style.height = `${Math.max(0, union.height)}px`;
+
+    const relativeRects = rects.map((rect) => ({
+      top: rect.top - union.top,
+      left: rect.left - union.left,
+      width: rect.width,
+      height: rect.height
+    }));
+
+    this.ensureSegmentCount(relativeRects.length);
+
+    for (let index = 0; index < this.segments.length; index += 1) {
+      const segment = this.segments[index];
+      const rect = relativeRects[index];
+      if (rect) {
+        segment.style.display = 'block';
+        segment.style.top = `${rect.top}px`;
+        segment.style.left = `${rect.left}px`;
+        segment.style.width = `${Math.max(0, rect.width)}px`;
+        segment.style.height = `${Math.max(0, rect.height)}px`;
+      } else {
+        segment.style.display = 'none';
+      }
+    }
   }
 }

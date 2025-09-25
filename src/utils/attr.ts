@@ -9,7 +9,7 @@ export function resolveHighlightContainer(element: Element, preferred: TargetAtt
 
   for (const attr of attributes) {
     const container = element.closest(`[${attr}]`);
-    if (container) {
+    if (container && container !== document.body && container !== document.documentElement) {
       return container;
     }
   }

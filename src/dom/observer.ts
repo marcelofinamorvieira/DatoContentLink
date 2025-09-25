@@ -1,49 +1,39 @@
-import { decodeStega } from '../decode/stega.js';
+import { decodeStega, stripStega } from '../decode/stega.js';
 import { DecodedInfo } from '../decode/types.js';
-
-const TEXT_SELECTOR = [
-  'p',
-  'h1',
-  'h2',
-  'h3',
-  'h4',
-  'h5',
-  'h6',
-  'span',
-  'li',
-  'figcaption',
-  'blockquote',
-  'a',
-  'strong',
-  'em',
-  'small',
-  'dd',
-  'dt',
-  'td',
-  'th',
-  'caption',
-  '[data-datocms-edit-target]',
-  '[data-vercel-edit-target]',
-  '[data-datocms-field-path]'
-].join(',');
-
-const IMAGE_SELECTOR = 'img[alt]';
 
 type CacheEntry = {
   info: DecodedInfo;
   signature: string;
+  cleaned: string;
 };
 
-export type StegaMatch = {
+export type ImageStegaMatch = {
   element: Element;
   info: DecodedInfo;
 };
 
+export type TextStegaMatch = {
+  node: Text;
+  info: DecodedInfo;
+};
+
+const NON_RENDERED_PARENTS = new Set(['SCRIPT', 'STYLE', 'TEMPLATE', 'NOSCRIPT']);
+
+type StegaObserverOptions = {
+  persistAfterClean: boolean;
+  debug: boolean;
+};
+
 export class StegaObserver {
   private observer: MutationObserver | null = null;
-  private readonly cache = new WeakMap<Element, CacheEntry>();
-  private readonly signatures = new WeakMap<Element, string>();
-  private readonly matched = new Set<Element>();
+  private readonly textCache = new WeakMap<Text, CacheEntry>();
+  private readonly textSignatures = new WeakMap<Text, string>();
+  private readonly textMatched = new Set<Text>();
+  private readonly imageCache = new WeakMap<Element, CacheEntry>();
+  private readonly imageSignatures = new WeakMap<Element, string>();
+  private readonly imageMatched = new Set<Element>();
+
+  constructor(private readonly options: StegaObserverOptions = { persistAfterClean: true, debug: false }) {}
 
   start(): void {
     if (typeof window === 'undefined' || typeof document === 'undefined') {
@@ -61,13 +51,14 @@ export class StegaObserver {
       this.observer.disconnect();
       this.observer = null;
     }
-    this.matched.clear();
+    this.textMatched.clear();
+    this.imageMatched.clear();
   }
 
-  getMatch(target: Element): StegaMatch | null {
+  getImageMatch(target: Element): ImageStegaMatch | null {
     let current: Element | null = target;
     while (current) {
-      const entry = this.cache.get(current);
+      const entry = this.imageCache.get(current);
       if (entry) {
         return { element: current, info: entry.info };
       }
@@ -76,16 +67,21 @@ export class StegaObserver {
     return null;
   }
 
-  findMatchWithin(root: Element): StegaMatch | null {
-    for (const element of this.matched) {
-      if (root.contains(element)) {
-        const entry = this.cache.get(element);
+  getTextMatchesWithin(root: Element): TextStegaMatch[] {
+    const matches: TextStegaMatch[] = [];
+    for (const node of this.textMatched) {
+      if (!node.isConnected) {
+        this.clearTextNode(node);
+        continue;
+      }
+      if (root.contains(node)) {
+        const entry = this.textCache.get(node);
         if (entry) {
-          return { element, info: entry.info };
+          matches.push({ node, info: entry.info });
         }
       }
     }
-    return null;
+    return matches;
   }
 
   private setupObserver(): void {
@@ -99,24 +95,24 @@ export class StegaObserver {
           mutation.addedNodes.forEach((node) => {
             if (node instanceof Element) {
               this.scan(node);
+            } else if (node instanceof Text) {
+              this.processTextNode(node);
             }
           });
           mutation.removedNodes.forEach((node) => {
             if (node instanceof Element) {
               this.clear(node);
+            } else if (node instanceof Text) {
+              this.clearTextNode(node);
             }
           });
         } else if (mutation.type === 'characterData') {
-          const parent = mutation.target.parentElement;
-          if (parent) {
-            this.processElement(parent);
+          if (mutation.target instanceof Text) {
+            this.processTextNode(mutation.target);
           }
         } else if (mutation.type === 'attributes') {
           if (mutation.target instanceof HTMLImageElement && mutation.attributeName === 'alt') {
-            this.processElement(mutation.target);
-          }
-          if (mutation.target instanceof Element && mutation.attributeName === 'data-datocms-field-path') {
-            this.processElement(mutation.target);
+            this.processImage(mutation.target);
           }
         }
       }
@@ -132,64 +128,144 @@ export class StegaObserver {
   }
 
   private scan(root: Element): void {
-    this.processElement(root);
-    root.querySelectorAll(TEXT_SELECTOR).forEach((element) => this.processElement(element));
-    root.querySelectorAll(IMAGE_SELECTOR).forEach((element) => this.processElement(element));
+    this.visitNode(root);
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const current = walker.currentNode;
+      if (current) {
+        this.visitNode(current);
+      }
+    }
   }
 
   private clear(root: Element): void {
-    this.cache.delete(root);
-    this.signatures.delete(root);
-    this.matched.delete(root);
-    root.querySelectorAll('*').forEach((node) => {
-      if (node instanceof Element) {
-        this.cache.delete(node);
-        this.signatures.delete(node);
-        this.matched.delete(node);
+    if (root instanceof HTMLImageElement) {
+      this.clearImage(root);
+    }
+
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+    let current: Node | null = walker.currentNode;
+    while (current) {
+      if (current instanceof Text) {
+        this.clearTextNode(current);
+      } else if (current instanceof HTMLImageElement) {
+        this.clearImage(current);
       }
-    });
-  }
-
-  private processElement(element: Element): void {
-    const signature = this.signatureFor(element);
-    if (!signature) {
-      this.cache.delete(element);
-      this.signatures.delete(element);
-      this.matched.delete(element);
-      return;
-    }
-
-    const previousSignature = this.signatures.get(element);
-    if (previousSignature === signature.signature) {
-      return;
-    }
-
-    this.signatures.set(element, signature.signature);
-    const info = decodeStega(signature.value);
-
-    if (info) {
-      this.cache.set(element, { info, signature: signature.signature });
-      this.matched.add(element);
-    } else {
-      this.cache.delete(element);
-      this.matched.delete(element);
+      current = walker.nextNode();
     }
   }
 
-  private signatureFor(element: Element): { value: string; signature: string } | null {
-    if (element instanceof HTMLImageElement) {
-      const alt = element.getAttribute('alt');
-      if (!alt) {
-        return null;
+  private visitNode(node: Node): void {
+    if (node instanceof Text) {
+      this.processTextNode(node);
+    } else if (node instanceof HTMLImageElement) {
+      this.processImage(node);
+    }
+  }
+
+  private processTextNode(node: Text): void {
+    const parent = node.parentElement;
+    if (!parent || NON_RENDERED_PARENTS.has(parent.tagName)) {
+      this.clearTextNode(node);
+      return;
+    }
+
+    const value = node.nodeValue ?? '';
+    if (!value) {
+      this.clearTextNode(node);
+      return;
+    }
+
+    const previousEntry = this.textCache.get(node);
+
+    const decoded = decodeStega(value);
+    if (decoded) {
+      const cleaned = stripStega(value);
+      const signature = `text:encoded:${value}`;
+      if (this.textSignatures.get(node) === signature) {
+        return;
       }
-      return { value: alt, signature: `alt:${alt}` };
+      this.textCache.set(node, { info: decoded, signature, cleaned });
+      this.textSignatures.set(node, signature);
+      this.textMatched.add(node);
+      return;
     }
 
-    const text = element.textContent;
-    if (!text) {
-      return null;
+    if (this.options.persistAfterClean && previousEntry && value === previousEntry.cleaned) {
+      const signature = `text:clean:${value}`;
+      if (this.textSignatures.get(node) === signature) {
+        this.textMatched.add(node);
+        return;
+      }
+      this.textCache.set(node, { info: previousEntry.info, signature, cleaned: value });
+      this.textSignatures.set(node, signature);
+      this.textMatched.add(node);
+      if (this.options.debug) {
+        console.log('[datocms-visual-editing][debug] persisted after clean (text node)', {
+          node,
+          value,
+          info: previousEntry.info
+        });
+      }
+      return;
     }
 
-    return { value: text, signature: `text:${text}` };
+    this.clearTextNode(node);
+  }
+
+  private processImage(element: HTMLImageElement): void {
+    const alt = element.getAttribute('alt') ?? '';
+    if (!alt) {
+      this.clearImage(element);
+      return;
+    }
+
+    const previousEntry = this.imageCache.get(element);
+
+    const decoded = decodeStega(alt);
+    if (decoded) {
+      const cleaned = stripStega(alt);
+      const signature = `alt:encoded:${alt}`;
+      if (this.imageSignatures.get(element) === signature) {
+        return;
+      }
+      this.imageCache.set(element, { info: decoded, signature, cleaned });
+      this.imageSignatures.set(element, signature);
+      this.imageMatched.add(element);
+      return;
+    }
+
+    if (this.options.persistAfterClean && previousEntry && alt === previousEntry.cleaned) {
+      const signature = `alt:clean:${alt}`;
+      if (this.imageSignatures.get(element) === signature) {
+        this.imageMatched.add(element);
+        return;
+      }
+      this.imageCache.set(element, { info: previousEntry.info, signature, cleaned: alt });
+      this.imageSignatures.set(element, signature);
+      this.imageMatched.add(element);
+      if (this.options.debug) {
+        console.log('[datocms-visual-editing][debug] persisted after clean (image alt)', {
+          element,
+          alt,
+          info: previousEntry.info
+        });
+      }
+      return;
+    }
+
+    this.clearImage(element);
+  }
+
+  private clearTextNode(node: Text): void {
+    this.textCache.delete(node);
+    this.textSignatures.delete(node);
+    this.textMatched.delete(node);
+  }
+
+  private clearImage(element: Element): void {
+    this.imageCache.delete(element);
+    this.imageSignatures.delete(element);
+    this.imageMatched.delete(element);
   }
 }
