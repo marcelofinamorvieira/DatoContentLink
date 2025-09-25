@@ -6,6 +6,7 @@ import {
   pointInBox,
   inflateBoxes,
   ensureMinSizeForBoxes,
+  mergeBoxes,
   type OverlayBoxes,
   type EdgePadding
 } from './dom/measure.js';
@@ -34,6 +35,8 @@ export type EnableOptions = {
   hitPadding?: EdgePadding;
   minHitSize?: number | { width: number; height?: number };
   hoverLingerMs?: number;
+  mergeSegments?: 'proximity' | 'always' | 'never';
+  mergeProximity?: EdgePadding;
 };
 
 type ResolvedMatch = {
@@ -63,7 +66,9 @@ const DEFAULTS = {
   persistAfterClean: true,
   hitPadding: 8 as EdgePadding,
   minHitSize: 0,
-  hoverLingerMs: 100
+  hoverLingerMs: 100,
+  mergeSegments: 'proximity' as const,
+  mergeProximity: 6 as EdgePadding
 };
 
 const FIELD_PATH_ATTR = 'data-datocms-field-path';
@@ -169,6 +174,8 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
     hitPadding: EdgePadding;
     minHitSize: number | { width: number; height?: number };
     hoverLingerMs: number;
+    mergeSegments: 'proximity' | 'always' | 'never';
+    mergeProximity: EdgePadding;
   };
 
   const baseEditingUrl = normalizeBaseUrl(options.baseEditingUrl);
@@ -454,6 +461,12 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
     if (minSize.width > 0 || minSize.height > 0) {
       transformed = ensureMinSizeForBoxes(transformed, minSize.width, minSize.height);
     }
+    // Coalesce overlapping lines/segments into a single clean overlay when desired.
+    transformed = mergeBoxes(
+      transformed,
+      options.mergeSegments ?? DEFAULTS.mergeSegments,
+      options.mergeProximity ?? DEFAULTS.mergeProximity
+    );
     return transformed;
   }
 

@@ -150,3 +150,89 @@ export function ensureMinSizeForBoxes(rects: OverlayBoxes, width: number, height
   }
   return rects.map((rect) => ensureMinSize(rect, width, height));
 }
+
+export function rectsIntersect(a: OverlayBox, b: OverlayBox): boolean {
+  return (
+    a.left <= b.left + b.width &&
+    a.left + a.width >= b.left &&
+    a.top <= b.top + b.height &&
+    a.top + a.height >= b.top
+  );
+}
+
+export function mergeUnion(rects: OverlayBoxes): OverlayBoxes {
+  const union = unionBox(rects);
+  return union ? [union] : [];
+}
+
+function buildGroups(rects: OverlayBoxes, proximity: EdgePadding): number[][] {
+  if (rects.length <= 1) {
+    return rects.length === 1 ? [[0]] : [];
+  }
+
+  const dilated = rects.map((rect) => inflateBox(rect, proximity));
+  const visited = new Array(rects.length).fill(false);
+  const groups: number[][] = [];
+
+  for (let i = 0; i < rects.length; i += 1) {
+    if (visited[i]) {
+      continue;
+    }
+
+    const stack = [i];
+    const current: number[] = [];
+    visited[i] = true;
+
+    while (stack.length) {
+      const index = stack.pop()!;
+      current.push(index);
+
+      for (let j = 0; j < rects.length; j += 1) {
+        if (visited[j]) {
+          continue;
+        }
+        if (rectsIntersect(dilated[index], dilated[j])) {
+          visited[j] = true;
+          stack.push(j);
+        }
+      }
+    }
+
+    groups.push(current);
+  }
+
+  return groups;
+}
+
+export function mergeByProximity(rects: OverlayBoxes, proximity: EdgePadding): OverlayBoxes {
+  const groups = buildGroups(rects, proximity);
+
+  if (!groups.length) {
+    return [];
+  }
+
+  return groups.map((indexes) => {
+    const groupRects = indexes.map((index) => rects[index]);
+    return unionBox(groupRects)!;
+  });
+}
+
+export function mergeBoxes(
+  rects: OverlayBoxes,
+  strategy: 'proximity' | 'always' | 'never',
+  proximity: EdgePadding
+): OverlayBoxes {
+  if (!rects.length) {
+    return rects;
+  }
+
+  switch (strategy) {
+    case 'never':
+      return rects;
+    case 'always':
+      return mergeUnion(rects);
+    case 'proximity':
+    default:
+      return mergeByProximity(rects, proximity);
+  }
+}

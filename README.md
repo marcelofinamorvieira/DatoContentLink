@@ -122,6 +122,8 @@ The initializer returns a disposer if you need to tear everything down (SPA rout
 - `hitPadding` (default `8`): inflate hover/click geometry so the pointer can drift slightly outside the glyphs or image and still count as “on the card”. Accepts a number or `{ x, y }` / directional object.
 - `minHitSize` (default `0`): guarantee a minimum overlay size (useful for tiny inline strings). Pass a number or `{ width, height }`.
 - `hoverLingerMs` (default `100`): hold the overlay on screen for a short time when the pointer leaves a target to avoid flicker.
+- `mergeSegments` (default `'proximity'`): merge per-line text rectangles. Set to `'always'` for a single box or `'never'` to keep discrete segments.
+- `mergeProximity` (default `6`): distance (in px or `EdgePadding` object) used when `mergeSegments: 'proximity'` to decide whether adjacent boxes should be merged.
 - `showBadge`: toggle the badge. When enabled, it’s clickable + keyboard accessible (`Enter` / `Space`).
 - Respect for `prefers-reduced-motion` disables outline animations automatically.
 
