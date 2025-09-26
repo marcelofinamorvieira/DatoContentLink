@@ -210,7 +210,8 @@ Numbers, booleans, slugs, coordinates, JSON blobs, counters, icons, SVGs, backgr
   data-datocms-edit-info='{
     "itemId": "123",
     "itemTypeId": "123456",
-    "fieldPath": "price"
+    "fieldPath": "price",
+    "locale": "en"
   }'
   data-datocms-edit-target
 >
@@ -220,7 +221,8 @@ Numbers, booleans, slugs, coordinates, JSON blobs, counters, icons, SVGs, backgr
 <!-- Minimal JSON tag when you already have _editingUrl -->
 <span
   data-datocms-edit-info='{
-    "editUrl": "https://acme.admin.datocms.com/editor/item_types/123456/items/789/edit#fieldPath=gallery.0.alt"
+    "editUrl": "https://acme.admin.datocms.com/editor/item_types/123456/items/789/edit#fieldPath=gallery.0.alt",
+    "locale": "en"
   }'
   data-datocms-edit-target
 >
@@ -232,11 +234,14 @@ Numbers, booleans, slugs, coordinates, JSON blobs, counters, icons, SVGs, backgr
   data-datocms-item-id="123"
   data-datocms-item-type-id="123456"
   data-datocms-field-path="seo.title"
+  data-datocms-locale="en"
   data-datocms-edit-target
 >
   <svg aria-hidden="true" class="icon icon--edit"></svg>
 </div>
 ```
+
+Always include the locale—either in the JSON payload or via the `data-datocms-locale` attribute—so overlays can open the correct localized field in the editor.
 
 In React/JS you can generate the attributes with `buildEditTagAttributes`:
 
@@ -244,7 +249,12 @@ In React/JS you can generate the attributes with `buildEditTagAttributes`:
 import { buildEditTagAttributes } from 'datocms-visual-editing';
 
 export function Price({ itemId, amount }: { itemId: string; amount: number }) {
-  const attrs = buildEditTagAttributes({ itemId, itemTypeId: '123456', fieldPath: 'price' });
+  const attrs = buildEditTagAttributes({
+    itemId,
+    itemTypeId: '123456',
+    fieldPath: 'price',
+    locale: 'en'
+  });
   return (
     <span {...attrs} data-datocms-edit-target>
       {amount.toFixed(2)}
@@ -260,7 +270,8 @@ If your GraphQL query includes the `_editingUrl` field you can pass it directly:
 ```tsx
 const attrs = buildEditTagAttributes({
   _editingUrl: data.product._editingUrl,
-  fieldPath: ['seo', 'title']
+  fieldPath: ['seo', 'title'],
+  locale: data.product._locale
 });
 ```
 
@@ -271,7 +282,7 @@ const attrs = buildEditTagAttributes({ fieldPath: 'name', locale: 'en' });
 // payload.fieldPath === 'name.en'
 ```
 
-Supplying a `locale` automatically appends it to the resolved field path (without duplicating it) and rewrites any existing `editUrl` hash so the editor opens the localized field.
+**Always supply a `locale`.** The overlays rely on it to route clicks to the correct localized value; the helper appends it to the resolved field path (without duplicating it) and rewrites any existing `editUrl` hash so the editor opens the localized field.
 
 `data-datocms-field-path` (if present) overrides any `fieldPath` provided via JSON or split attributes.
 When you call `buildEditTagAttributes(info, 'attrs')`, set `data-datocms-field-path` separately if you need a specific tab/anchor in the editor.
@@ -302,7 +313,7 @@ When you call `buildEditTagAttributes(info, 'attrs')`, set `data-datocms-field-p
 | `buildEditTagAttributes(info, format?)` | Returns the `data-datocms-*` attrs needed to opt-in overlays for non-text elements. |
 | `applyEditTagAttributes(element, info, format?)` | Imperatively stamp the same attributes onto a DOM node. |
 
-Both helpers that accept a `locale` (`buildEditTagAttributes` and `buildDatoDeepLink`) append the locale segment to the resolved `fieldPath` and ensure the `#fieldPath` hash in the edit URL points at the localized value.
+Always provide a `locale` to `buildEditTagAttributes` and `buildDatoDeepLink`; both helpers append the locale segment to the resolved `fieldPath` and ensure the `#fieldPath` hash in the edit URL points at the localized value.
 
 ### `onResolveUrl` hook
 
