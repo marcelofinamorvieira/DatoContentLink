@@ -1,6 +1,6 @@
 {
   "name": "datocms-visual-editing",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "DatoCMS visual editing overlays without Vercel dependencies.",
   "type": "module",
   "main": "./dist/index.js",

@@ -271,7 +271,7 @@ If your GraphQL query includes the `_editingUrl` field you can pass it directly:
 const attrs = buildEditTagAttributes({
   _editingUrl: data.product._editingUrl,
   fieldPath: ['seo', 'title'],
-  locale: data.product._locale
+  locale: "en"
 });
 ```
 
