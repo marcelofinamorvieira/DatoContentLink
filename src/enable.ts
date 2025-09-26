@@ -30,6 +30,10 @@ export type EnableOptions = {
   openInNewTab?: boolean;
   onBeforeOpen?: (url: string, ev: MouseEvent) => boolean | void;
   debug?: boolean;
+  /**
+   * Leave this enabled (default) and pair with AutoClean so overlays remain clickable
+   * after the hidden stega markers are scrubbed from the DOM.
+   */
   persistAfterClean?: boolean;
   // Interaction tuning knobs so overlays match the mental “card” target.
   hitPadding?: EdgePadding;

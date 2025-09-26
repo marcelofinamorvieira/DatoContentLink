@@ -11,6 +11,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "import": "./dist/react/index.js",
+      "default": "./dist/react/index.js"
     }
   },
   "files": [
@@ -42,6 +47,7 @@
   "devDependencies": {
     "@types/jsdom": "^21.1.0",
     "@types/node": "^20.14.10",
+    "@types/react": "^18.3.3",
     "jsdom": "^24.0.0",
     "rimraf": "^5.0.5",
     "typescript": "^5.5.4",
@@ -49,6 +55,14 @@
   },
   "dependencies": {
     "@vercel/stega": "^0.1.2"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
   },
   "packageManager": "pnpm@9.6.0",
   "repository": {

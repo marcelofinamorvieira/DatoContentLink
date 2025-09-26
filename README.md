@@ -24,17 +24,51 @@
    ```
 
 3. **Enable overlays in your preview bundle.**
-   ```ts
-   import { enableDatoVisualEditing } from 'datocms-visual-editing';
+  ```ts
+  import { enableDatoVisualEditing } from 'datocms-visual-editing';
 
-   enableDatoVisualEditing({
-     baseEditingUrl: 'https://acme.admin.datocms.com',
-     activate: 'query',       // ?edit=1 turns it on by default
-     overlays: 'hover'
-   });
+  enableDatoVisualEditing({
+    baseEditingUrl: 'https://acme.admin.datocms.com',
+    activate: 'query',       // ?edit=1 turns it on by default
+    overlays: 'hover',
+    // Best practice: keep this true so overlays remain clickable after AutoClean
+    persistAfterClean: true
+  });
+  ```
+
+4. **Run AutoClean after hydration (recommended).**
+
+   **React** (import from the `react` subpath):
+
+   ```tsx
+   'use client'
+   import { DatoAutoClean } from 'datocms-visual-editing/react';
+
+   export function PreviewCard({ title, intro, image }) {
+     return (
+       <DatoAutoClean as="article" className="card" options={{ delayMs: 32 }}>
+         <h1>{title}</h1>
+         <p>{intro}</p>
+         <img src={image.url} alt={image.alt ?? ''} />
+       </DatoAutoClean>
+     );
+   }
    ```
 
-4. **(Optional) Mark up large cards.** Wrap card containers with `data-datocms-edit-target` so the whole card highlights, not just the text node.
+   **Non-React**:
+
+   ```ts
+   import { enableDatoAutoClean, autoCleanStegaWithin } from 'datocms-visual-editing';
+
+   enableDatoAutoClean();          // Cleans inside every [data-datocms-auto-clean]
+   // or
+   autoCleanStegaWithin(containerElement);
+   ```
+
+   AutoClean scrubs the zero-width stega markers shortly after hydration while
+   overlays stay functional thanks to `persistAfterClean: true`.
+
+5. **(Optional) Mark up large cards.** Wrap card containers with `data-datocms-edit-target` so the whole card highlights, not just the text node.
 
 That’s it—hover or click the decoded content in your preview build to jump straight to the matching record inside DatoCMS.
 
@@ -179,13 +213,50 @@ enableDatoVisualEditing({
 
 Every overlay click outputs a `[datocms-visual-editing][debug] overlay click` entry with the resolved URL, decoded metadata, and the highlighted DOM node. Handy when verifying that your field paths, environments, and custom `onResolveUrl` logic line up with expectations.
 
-### Stega clean-up resilience
+### Recommended: Persist + AutoClean
 
-Frameworks such as Next.js strip the hidden stega markers shortly after hydration. By default (`persistAfterClean: true`) the observer keeps the decoded metadata alive as long as the visible text/alt string stays the same, so overlays remain clickable even after the cleanup. Disable this behaviour by passing `persistAfterClean: false` if you prefer to require markers at all times.
+Keep `persistAfterClean: true` (the default) when you call `enableDatoVisualEditing()` and pair it with one of the AutoClean helpers. The observer caches each decoded payload so overlays stay interactive even after the hidden stega markers are scrubbed from the DOM. This gives you layout parity with production fonts while retaining click-to-edit previews. Only disable `persistAfterClean` if you intentionally want to keep the markers in the DOM at all times.
 
-### Auto-clean stega marks (optional)
+Frameworks such as Next.js often remove zero-width characters shortly after hydration, so running AutoClean yourself ensures a controlled, predictable scrub instead of relying on framework quirks.
 
-Zero-width stega characters can still nudge kerning or wraps in some fonts. If you want overlays to decode the payload once and then scrub the markers shortly after hydration, opt into the auto-clean helpers.
+### Auto-clean stega marks
+
+Zero-width stega characters can still nudge kerning or wraps in some fonts. AutoClean removes them shortly after hydration while overlays remain clickable thanks to the persisted decoding cache.
+
+**React component**
+
+```tsx
+'use client';
+import { DatoAutoClean } from 'datocms-visual-editing/react';
+
+export function PriceCard({ title, intro, image }) {
+  return (
+    <DatoAutoClean as="article" className="card" options={{ delayMs: 32 }}>
+      <h1>{title}</h1>
+      <p>{intro}</p>
+      <img src={image.url} alt={image.alt ?? ''} />
+    </DatoAutoClean>
+  );
+}
+```
+
+**React hook**
+
+```tsx
+'use client';
+import { useRef } from 'react';
+import { useDatoAutoClean } from 'datocms-visual-editing/react';
+
+export function Price({ children }: { children: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useDatoAutoClean(ref, { delayMs: 32 });
+  return (
+    <span ref={ref} data-datocms-edit-target data-datocms-auto-clean>
+      {children}
+    </span>
+  );
+}
+```
 
 **Attribute-based**
 
@@ -196,11 +267,9 @@ Zero-width stega characters can still nudge kerning or wraps in some fonts. If y
 ```
 
 ```ts
-import { enableDatoVisualEditing, enableDatoAutoClean } from 'datocms-visual-editing';
+import { enableDatoAutoClean } from 'datocms-visual-editing';
 
-enableDatoVisualEditing({ baseEditingUrl, activate: 'always' });
-// Scrub markers inside every [data-datocms-auto-clean] container after ~2 rAFs
-const disposeAutoClean = enableDatoAutoClean();
+enableDatoAutoClean();
 ```
 
 **Programmatic (per container)**
@@ -215,27 +284,10 @@ const dispose = autoCleanStegaWithin(document.getElementById('price')!, {
 });
 ```
 
-**React example**
-
-```tsx
-'use client';
-import { useEffect, useRef } from 'react';
-import { autoCleanStegaWithin } from 'datocms-visual-editing';
-
-export function Price({ children }: { children: string }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  useEffect(() => {
-    if (!ref.current) return;
-    return autoCleanStegaWithin(ref.current, { delayMs: 32 });
-  }, [children]);
-  return <span ref={ref} data-datocms-auto-clean>{children}</span>;
-}
-```
-
 **Notes**
 
-- Requires the default `persistAfterClean: true` on `enableDatoVisualEditing(...)` so overlays stay active after the scrub.
-- Pass `observe: true` if the container receives stega text later (e.g. live preview streams); otherwise the cleaner runs once and disposes.
+- Keep `persistAfterClean: true` on `enableDatoVisualEditing(...)` so overlays stay active after the scrub.
+- Pass `observe: true` if the container receives stega text later (e.g. live preview streams); otherwise the cleaner runs once per mount.
 - For typography-critical strings you can skip the initial paint with markers by rendering `stripStega(value)` plus `buildEditTagAttributes(...)` instead of relying on auto-clean.
 
 ### Deep link behaviour
@@ -367,6 +419,8 @@ When you call `buildEditTagAttributes(info, 'attrs')`, set `data-datocms-field-p
 | `stripStega(text)` | Removes hidden characters so you can measure text without re-rendering. |
 | `buildEditTagAttributes(info, format?)` | Returns the `data-datocms-*` attrs needed to opt-in overlays for non-text elements. |
 | `applyEditTagAttributes(element, info, format?)` | Imperatively stamp the same attributes onto a DOM node. |
+| `useDatoAutoClean(ref, options?)` *(import from `datocms-visual-editing/react`)* | React hook that runs `autoCleanStegaWithin` on a ref’d element. |
+| `<DatoAutoClean {...} />` *(import from `datocms-visual-editing/react`)* | React component wrapper that auto-cleans its subtree and sets the discovery attribute. |
 
 Always provide a `locale` to `buildEditTagAttributes` and `buildDatoDeepLink`; both helpers append the locale segment to the resolved `fieldPath` and ensure the `#fieldPath` hash in the edit URL points at the localized value.
 

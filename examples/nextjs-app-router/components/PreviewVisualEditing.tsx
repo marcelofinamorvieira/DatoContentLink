@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { enableDatoAutoClean, enableDatoVisualEditing } from 'datocms-visual-editing';
+import { enableDatoVisualEditing } from 'datocms-visual-editing';
 
 type PreviewVisualEditingProps = {
   baseEditingUrl: string;
@@ -18,10 +18,7 @@ export function PreviewVisualEditing({ baseEditingUrl, environment }: PreviewVis
       targetAttribute: 'data-datocms-edit-target'
     });
 
-    const disposeAutoClean = enableDatoAutoClean();
-
     return () => {
-      disposeAutoClean?.();
       disposeVisualEditing?.();
     };
   }, [baseEditingUrl, environment]);
