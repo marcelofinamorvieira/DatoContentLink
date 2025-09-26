@@ -3,6 +3,7 @@ import { normalizeFieldPath } from '../link/fieldPath.js';
 
 export type TargetAttribute = 'data-datocms-edit-target' | 'data-vercel-edit-target';
 
+export const AUTO_CLEAN_ATTR = 'data-datocms-auto-clean';
 export const DATA_ATTR_EDIT_INFO = 'data-datocms-edit-info';
 export const DATA_ATTR_ITEM_ID = 'data-datocms-item-id';
 export const DATA_ATTR_ITEM_TYPE_ID = 'data-datocms-item-type-id';

@@ -42,7 +42,7 @@ export default async function Page() {
         <PreviewVisualEditing baseEditingUrl={baseEditingUrl} environment="staging" />
       )}
 
-      <article className="rounded-xl border border-zinc-200 p-6 shadow-sm" data-datocms-edit-target>
+      <article className="rounded-xl border border-zinc-200 p-6 shadow-sm" data-datocms-edit-target data-datocms-auto-clean>
         <h1 className="text-3xl font-semibold">{data.homePage?.title ?? 'Untitled'}</h1>
         <p className="text-lg text-zinc-600">{data.homePage?.intro}</p>
         {data.homePage?.heroImage && (

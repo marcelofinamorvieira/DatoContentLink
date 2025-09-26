@@ -183,6 +183,61 @@ Every overlay click outputs a `[datocms-visual-editing][debug] overlay click` en
 
 Frameworks such as Next.js strip the hidden stega markers shortly after hydration. By default (`persistAfterClean: true`) the observer keeps the decoded metadata alive as long as the visible text/alt string stays the same, so overlays remain clickable even after the cleanup. Disable this behaviour by passing `persistAfterClean: false` if you prefer to require markers at all times.
 
+### Auto-clean stega marks (optional)
+
+Zero-width stega characters can still nudge kerning or wraps in some fonts. If you want overlays to decode the payload once and then scrub the markers shortly after hydration, opt into the auto-clean helpers.
+
+**Attribute-based**
+
+```html
+<span data-datocms-auto-clean>
+  $9.99<!-- stega-encoded -->
+</span>
+```
+
+```ts
+import { enableDatoVisualEditing, enableDatoAutoClean } from 'datocms-visual-editing';
+
+enableDatoVisualEditing({ baseEditingUrl, activate: 'always' });
+// Scrub markers inside every [data-datocms-auto-clean] container after ~2 rAFs
+const disposeAutoClean = enableDatoAutoClean();
+```
+
+**Programmatic (per container)**
+
+```ts
+import { autoCleanStegaWithin } from 'datocms-visual-editing';
+
+const dispose = autoCleanStegaWithin(document.getElementById('price')!, {
+  delayMs: 32,
+  observe: false,
+  cleanImageAlts: true
+});
+```
+
+**React example**
+
+```tsx
+'use client';
+import { useEffect, useRef } from 'react';
+import { autoCleanStegaWithin } from 'datocms-visual-editing';
+
+export function Price({ children }: { children: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!ref.current) return;
+    return autoCleanStegaWithin(ref.current, { delayMs: 32 });
+  }, [children]);
+  return <span ref={ref} data-datocms-auto-clean>{children}</span>;
+}
+```
+
+**Notes**
+
+- Requires the default `persistAfterClean: true` on `enableDatoVisualEditing(...)` so overlays stay active after the scrub.
+- Pass `observe: true` if the container receives stega text later (e.g. live preview streams); otherwise the cleaner runs once and disposes.
+- For typography-critical strings you can skip the initial paint with markers by rendering `stripStega(value)` plus `buildEditTagAttributes(...)` instead of relying on auto-clean.
+
 ### Deep link behaviour
 
 - If a stega payload already carries an `editUrl` that matches your `baseEditingUrl` origin, the overlay reuses it verbatim so editor tabs, locales, and `#fieldPath` hashes stay intact.
