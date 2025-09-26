@@ -241,7 +241,7 @@ Numbers, booleans, slugs, coordinates, JSON blobs, counters, icons, SVGs, backgr
 </div>
 ```
 
-Always include the locale—either in the JSON payload or via the `data-datocms-locale` attribute—so overlays can open the correct localized field in the editor.
+Always include the locale—either in the JSON payload or via the `data-datocms-locale` attribute—so overlays can open the correct localized field in the editor. Keep `fieldPath` segments snake_case to match the editor anchors (`sale_price.en`, not `salePrice.en`).
 
 In React/JS you can generate the attributes with `buildEditTagAttributes`:
 
@@ -278,8 +278,8 @@ const attrs = buildEditTagAttributes({
 When `_editingUrl` is provided the helper appends the normalized `fieldPath` to the URL and can omit both `itemId` and `itemTypeId`.
 
 ```tsx
-const attrs = buildEditTagAttributes({ fieldPath: 'name', locale: 'en' });
-// payload.fieldPath === 'name.en'
+const attrs = buildEditTagAttributes({ fieldPath: 'sale_price', locale: 'en' });
+// payload.fieldPath === 'sale_price.en'
 ```
 
 **Always supply a `locale`.** The overlays rely on it to route clicks to the correct localized value; the helper appends it to the resolved field path (without duplicating it) and rewrites any existing `editUrl` hash so the editor opens the localized field.
