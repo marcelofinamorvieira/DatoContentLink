@@ -16,6 +16,7 @@ export type EditTagInfo = {
   environment?: string;
   locale?: string;
   editUrl?: string;
+  _editingUrl?: string;
 };
 
 export type EditTagFormat = 'json' | 'attrs';
@@ -29,9 +30,15 @@ export function buildEditTagAttributes(
   const cleanedEnvironment = cleanString(info.environment);
   const cleanedLocale = cleanString(info.locale);
   const cleanedEditUrl = cleanString(info.editUrl);
+  const cleanedEditingUrl = cleanString(info._editingUrl);
   const normalizedFieldPath = normalizeFieldPath(info.fieldPath ?? undefined) ?? undefined;
+  const resolvedEditUrl = cleanedEditUrl ?? cleanedEditingUrl;
+  const editUrlWithFieldPath =
+    resolvedEditUrl && normalizedFieldPath
+      ? mergeFieldPathIntoUrl(resolvedEditUrl, normalizedFieldPath)
+      : resolvedEditUrl;
 
-  if (!cleanedItemId && !cleanedEditUrl) {
+  if (!cleanedItemId && !editUrlWithFieldPath) {
     return {};
   }
 
@@ -43,8 +50,8 @@ export function buildEditTagAttributes(
     if (cleanedItemTypeId) {
       attrs[DATA_ATTR_ITEM_TYPE_ID] = cleanedItemTypeId;
     }
-    if (cleanedEditUrl) {
-      attrs[DATA_ATTR_EDIT_URL] = cleanedEditUrl;
+    if (editUrlWithFieldPath) {
+      attrs[DATA_ATTR_EDIT_URL] = editUrlWithFieldPath;
     }
     if (cleanedEnvironment) {
       attrs[DATA_ATTR_ENV] = cleanedEnvironment;
@@ -68,8 +75,8 @@ export function buildEditTagAttributes(
   if (cleanedLocale) {
     payload.locale = cleanedLocale;
   }
-  if (cleanedEditUrl) {
-    payload.editUrl = cleanedEditUrl;
+  if (editUrlWithFieldPath) {
+    payload.editUrl = editUrlWithFieldPath;
   }
   if (normalizedFieldPath) {
     payload.fieldPath = normalizedFieldPath;
@@ -101,4 +108,23 @@ function cleanString(value: string | undefined): string | undefined {
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function mergeFieldPathIntoUrl(url: string, fieldPath: string): string {
+  if (!fieldPath) {
+    return url;
+  }
+
+  try {
+    const parsed = new URL(url);
+    const currentHash = parsed.hash.startsWith('#') ? parsed.hash.slice(1) : parsed.hash;
+    const params = new URLSearchParams(currentHash);
+    params.set('fieldPath', fieldPath);
+    const nextHash = params.toString();
+    parsed.hash = nextHash ? `#${nextHash}` : '';
+    return parsed.toString();
+  } catch (error) {
+    const separator = url.includes('#') ? '&' : '#';
+    return `${url}${separator}fieldPath=${encodeURIComponent(fieldPath)}`;
+  }
 }

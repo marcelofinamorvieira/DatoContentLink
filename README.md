@@ -209,7 +209,7 @@ Numbers, booleans, slugs, coordinates, JSON blobs, counters, icons, SVGs, backgr
 <span
   data-datocms-edit-info='{
     "itemId": "123",
-    "itemTypeId": "product",
+    "itemTypeId": "123456",
     "fieldPath": "price"
   }'
   data-datocms-edit-target
@@ -220,7 +220,7 @@ Numbers, booleans, slugs, coordinates, JSON blobs, counters, icons, SVGs, backgr
 <!-- Split attributes (no inline JSON) -->
 <div
   data-datocms-item-id="123"
-  data-datocms-item-type-id="product"
+  data-datocms-item-type-id="123456"
   data-datocms-field-path="seo.title"
   data-datocms-edit-target
 >
@@ -234,7 +234,7 @@ In React/JS you can generate the attributes with `buildEditTagAttributes`:
 import { buildEditTagAttributes } from 'datocms-visual-editing';
 
 export function Price({ itemId, amount }: { itemId: string; amount: number }) {
-  const attrs = buildEditTagAttributes({ itemId, itemTypeId: 'product', fieldPath: 'price' });
+  const attrs = buildEditTagAttributes({ itemId, itemTypeId: '123456', fieldPath: 'price' });
   return (
     <span {...attrs} data-datocms-edit-target>
       {amount.toFixed(2)}
@@ -242,6 +242,19 @@ export function Price({ itemId, amount }: { itemId: string; amount: number }) {
   );
 }
 ```
+
+The `itemTypeId` value must be the model's internal numeric ID from DatoCMS (for example `123456`), not the API identifier such as `product`.
+
+If your GraphQL query includes the `_editingUrl` field you can pass it directly:
+
+```tsx
+const attrs = buildEditTagAttributes({
+  _editingUrl: data.product._editingUrl,
+  fieldPath: ['seo', 'title']
+});
+```
+
+When `_editingUrl` is provided the helper appends the normalized `fieldPath` to the URL and can omit both `itemId` and `itemTypeId`.
 
 `data-datocms-field-path` (if present) overrides any `fieldPath` provided via JSON or split attributes.
 When you call `buildEditTagAttributes(info, 'attrs')`, set `data-datocms-field-path` separately if you need a specific tab/anchor in the editor.
