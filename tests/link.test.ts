@@ -21,6 +21,16 @@ describe('buildDatoDeepLink', () => {
     expect(buildDatoDeepLink(info, BASE)).toBe(info.editUrl);
   });
 
+  it('merges locale into same-origin editUrl hash', () => {
+    const info = baseInfo({
+      editUrl: 'https://acme.admin.datocms.com/editor/items/123/edit#fieldPath=title',
+      locale: 'fr'
+    });
+    expect(buildDatoDeepLink(info, BASE)).toBe(
+      'https://acme.admin.datocms.com/editor/items/123/edit#fieldPath=title.fr'
+    );
+  });
+
   it('builds link with item type and environment option', () => {
     const info = baseInfo({ itemTypeId: 'post' });
     const link = buildDatoDeepLink(info, BASE, 'preview');
@@ -45,5 +55,11 @@ describe('buildDatoDeepLink', () => {
     const info = baseInfo();
     const link = buildDatoDeepLink(info, BASE);
     expect(link).toBe('https://acme.admin.datocms.com/editor/items/123/edit');
+  });
+
+  it('adds locale segment to fieldPath hash when available', () => {
+    const info = baseInfo({ fieldPath: 'name', locale: 'pt-BR' });
+    const link = buildDatoDeepLink(info, BASE);
+    expect(link).toBe('https://acme.admin.datocms.com/editor/items/123/edit#fieldPath=name.pt-BR');
   });
 });

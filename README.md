@@ -217,6 +217,16 @@ Numbers, booleans, slugs, coordinates, JSON blobs, counters, icons, SVGs, backgr
   129.00
 </span>
 
+<!-- Minimal JSON tag when you already have _editingUrl -->
+<span
+  data-datocms-edit-info='{
+    "editUrl": "https://acme.admin.datocms.com/editor/item_types/123456/items/789/edit#fieldPath=gallery.0.alt"
+  }'
+  data-datocms-edit-target
+>
+  <img src="/gallery.jpg" alt="Gallery item" />
+</span>
+
 <!-- Split attributes (no inline JSON) -->
 <div
   data-datocms-item-id="123"
@@ -256,6 +266,13 @@ const attrs = buildEditTagAttributes({
 
 When `_editingUrl` is provided the helper appends the normalized `fieldPath` to the URL and can omit both `itemId` and `itemTypeId`.
 
+```tsx
+const attrs = buildEditTagAttributes({ fieldPath: 'name', locale: 'en' });
+// payload.fieldPath === 'name.en'
+```
+
+Supplying a `locale` automatically appends it to the resolved field path (without duplicating it) and rewrites any existing `editUrl` hash so the editor opens the localized field.
+
 `data-datocms-field-path` (if present) overrides any `fieldPath` provided via JSON or split attributes.
 When you call `buildEditTagAttributes(info, 'attrs')`, set `data-datocms-field-path` separately if you need a specific tab/anchor in the editor.
 
@@ -284,6 +301,8 @@ When you call `buildEditTagAttributes(info, 'attrs')`, set `data-datocms-field-p
 | `stripStega(text)` | Removes hidden characters so you can measure text without re-rendering. |
 | `buildEditTagAttributes(info, format?)` | Returns the `data-datocms-*` attrs needed to opt-in overlays for non-text elements. |
 | `applyEditTagAttributes(element, info, format?)` | Imperatively stamp the same attributes onto a DOM node. |
+
+Both helpers that accept a `locale` (`buildEditTagAttributes` and `buildDatoDeepLink`) append the locale segment to the resolved `fieldPath` and ensure the `#fieldPath` hash in the edit URL points at the localized value.
 
 ### `onResolveUrl` hook
 

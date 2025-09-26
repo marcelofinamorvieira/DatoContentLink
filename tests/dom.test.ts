@@ -399,7 +399,7 @@ describe('enableDatoVisualEditing', () => {
 
     wrapper.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 40, clientY: 30 }));
     expect(openSpy).toHaveBeenCalledWith(
-      'https://acme.admin.datocms.com/editor/items/900/edit#fieldPath=stats.count',
+      'https://acme.admin.datocms.com/editor/items/900/edit#fieldPath=stats.count.en',
       '_self'
     );
 

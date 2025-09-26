@@ -1,4 +1,9 @@
-import { normalizeFieldPath } from '../link/fieldPath.js';
+import {
+  extractFieldPathFromUrl,
+  mergeFieldPathIntoUrl,
+  normalizeFieldPath,
+  withLocaleFieldPath
+} from '../link/fieldPath.js';
 import {
   DATA_ATTR_EDIT_INFO,
   DATA_ATTR_ITEM_ID,
@@ -31,11 +36,17 @@ export function buildEditTagAttributes(
   const cleanedLocale = cleanString(info.locale);
   const cleanedEditUrl = cleanString(info.editUrl);
   const cleanedEditingUrl = cleanString(info._editingUrl);
-  const normalizedFieldPath = normalizeFieldPath(info.fieldPath ?? undefined) ?? undefined;
   const resolvedEditUrl = cleanedEditUrl ?? cleanedEditingUrl;
+  const explicitFieldPath = normalizeFieldPath(info.fieldPath ?? undefined);
+  const extractedFieldPath = resolvedEditUrl
+    ? normalizeFieldPath(extractFieldPathFromUrl(resolvedEditUrl) ?? undefined)
+    : null;
+  const baseFieldPath = explicitFieldPath ?? extractedFieldPath;
+  const fieldPathWithLocale = withLocaleFieldPath(baseFieldPath, cleanedLocale);
+  const resolvedFieldPath = fieldPathWithLocale ?? undefined;
   const editUrlWithFieldPath =
-    resolvedEditUrl && normalizedFieldPath
-      ? mergeFieldPathIntoUrl(resolvedEditUrl, normalizedFieldPath)
+    resolvedEditUrl && resolvedFieldPath
+      ? mergeFieldPathIntoUrl(resolvedEditUrl, resolvedFieldPath)
       : resolvedEditUrl;
 
   if (!cleanedItemId && !editUrlWithFieldPath) {
@@ -78,8 +89,8 @@ export function buildEditTagAttributes(
   if (editUrlWithFieldPath) {
     payload.editUrl = editUrlWithFieldPath;
   }
-  if (normalizedFieldPath) {
-    payload.fieldPath = normalizedFieldPath;
+  if (resolvedFieldPath) {
+    payload.fieldPath = resolvedFieldPath;
   }
 
   return {
@@ -108,23 +119,4 @@ function cleanString(value: string | undefined): string | undefined {
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
-}
-
-function mergeFieldPathIntoUrl(url: string, fieldPath: string): string {
-  if (!fieldPath) {
-    return url;
-  }
-
-  try {
-    const parsed = new URL(url);
-    const currentHash = parsed.hash.startsWith('#') ? parsed.hash.slice(1) : parsed.hash;
-    const params = new URLSearchParams(currentHash);
-    params.set('fieldPath', fieldPath);
-    const nextHash = params.toString();
-    parsed.hash = nextHash ? `#${nextHash}` : '';
-    return parsed.toString();
-  } catch (error) {
-    const separator = url.includes('#') ? '&' : '#';
-    return `${url}${separator}fieldPath=${encodeURIComponent(fieldPath)}`;
-  }
 }

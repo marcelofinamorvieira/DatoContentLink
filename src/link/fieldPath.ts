@@ -67,3 +67,81 @@ export function normalizeFieldPath(path: unknown): string | null {
 
   return null;
 }
+
+export function withLocaleFieldPath(
+  fieldPath: string | null,
+  locale: string | null | undefined
+): string | null {
+  if (!fieldPath) {
+    return fieldPath;
+  }
+
+  if (!locale) {
+    return fieldPath;
+  }
+
+  const trimmedLocale = locale.trim();
+  if (!trimmedLocale) {
+    return fieldPath;
+  }
+
+  const segments = fieldPath.split('.');
+  const lastSegment = segments[segments.length - 1];
+  if (lastSegment === trimmedLocale) {
+    return fieldPath;
+  }
+
+  return `${fieldPath}.${trimmedLocale}`;
+}
+
+export function extractFieldPathFromUrl(url: string): string | null {
+  if (!url) {
+    return null;
+  }
+
+  const parse = (value: string): string | null => {
+    if (!value) {
+      return null;
+    }
+    const params = new URLSearchParams(value);
+    const fieldPath = params.get('fieldPath');
+    return fieldPath && fieldPath.trim().length > 0 ? fieldPath : null;
+  };
+
+  try {
+    const parsed = new URL(url);
+    const hash = parsed.hash.startsWith('#') ? parsed.hash.slice(1) : parsed.hash;
+    const result = parse(hash);
+    if (result) {
+      return result;
+    }
+  } catch (error) {
+    // Ignore errors from invalid URLs and fallback below.
+  }
+
+  const hashIndex = url.indexOf('#');
+  if (hashIndex === -1) {
+    return null;
+  }
+  const hash = url.slice(hashIndex + 1);
+  return parse(hash);
+}
+
+export function mergeFieldPathIntoUrl(url: string, fieldPath: string): string {
+  if (!fieldPath) {
+    return url;
+  }
+
+  try {
+    const parsed = new URL(url);
+    const currentHash = parsed.hash.startsWith('#') ? parsed.hash.slice(1) : parsed.hash;
+    const params = new URLSearchParams(currentHash);
+    params.set('fieldPath', fieldPath);
+    const nextHash = params.toString();
+    parsed.hash = nextHash ? `#${nextHash}` : '';
+    return parsed.toString();
+  } catch (error) {
+    const separator = url.includes('#') ? '&' : '#';
+    return `${url}${separator}fieldPath=${encodeURIComponent(fieldPath)}`;
+  }
+}

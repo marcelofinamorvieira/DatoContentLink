@@ -1,5 +1,10 @@
 import { DecodedInfo } from '../decode/types.js';
-import { normalizeFieldPath } from './fieldPath.js';
+import {
+  extractFieldPathFromUrl,
+  mergeFieldPathIntoUrl,
+  normalizeFieldPath,
+  withLocaleFieldPath
+} from './fieldPath.js';
 
 function stripTrailingSlash(url: string): string {
   return url.endsWith('/') ? url.slice(0, -1) : url;
@@ -30,6 +35,13 @@ export function buildDatoDeepLink(info: DecodedInfo, baseEditingUrl: string, env
   const normalizedBase = stripTrailingSlash(baseEditingUrl);
 
   if (info.editUrl && sameOrigin(info.editUrl, normalizedBase)) {
+    const extractedFieldPath = normalizeFieldPath(
+      info.fieldPath ?? extractFieldPathFromUrl(info.editUrl) ?? undefined
+    );
+    const fieldPathWithLocale = withLocaleFieldPath(extractedFieldPath, info.locale ?? null);
+    if (fieldPathWithLocale) {
+      return mergeFieldPathIntoUrl(info.editUrl, fieldPathWithLocale);
+    }
     return info.editUrl;
   }
 
@@ -54,11 +66,12 @@ export function buildDatoDeepLink(info: DecodedInfo, baseEditingUrl: string, env
     segments.push(`items/${encodeURIComponent(itemId)}/edit`);
   }
 
-  const fieldPath = normalizeFieldPath(info.fieldPath);
+  const baseFieldPath = normalizeFieldPath(info.fieldPath);
+  const fieldPath = withLocaleFieldPath(baseFieldPath, info.locale ?? null);
   const url = segments.join('/');
 
   if (fieldPath) {
-    return `${url}#fieldPath=${encodeURIComponent(fieldPath)}`;
+    return mergeFieldPathIntoUrl(url, fieldPath);
   }
 
   return url;
