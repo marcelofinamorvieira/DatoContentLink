@@ -46,21 +46,6 @@ export function normalizeFieldPath(path: unknown): string | null {
     return fromArray(path);
   }
 
-  if (typeof path === 'object') {
-    const entries: string[] = [];
-    for (const key of Object.keys(path as Record<string, unknown>)) {
-      if (!Number.isNaN(Number(key))) {
-        entries.push(key);
-      } else {
-        entries.push(key);
-      }
-    }
-    if (entries.length === 0) {
-      return null;
-    }
-    return entries.join('.');
-  }
-
   if (typeof path === 'number' && Number.isFinite(path)) {
     return String(path);
   }

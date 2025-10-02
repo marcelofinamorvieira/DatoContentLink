@@ -19,22 +19,8 @@ import {
   TargetAttribute,
   FIELD_PATH_ATTR
 } from './utils/attr.js';
-import { findInteractiveAncestor, readClickConflictOverride, type ClickConflictOverride } from './utils/interactive.js';
 import { isElement, isHTMLElement } from './utils/guards.js';
 import { rafThrottle } from './utils/throttle.js';
-
-export type ClickConflictMode = 'prefer-dato' | 'prefer-page' | 'prompt' | 'modifier';
-
-export type ClickModifier = 'alt' | 'meta' | 'ctrl' | 'shift';
-
-export type ClickConflictOptions = {
-  mode?: ClickConflictMode;
-  modifierForDato?: ClickModifier;
-  modifierForPage?: ClickModifier;
-  detector?: (el: Element) => boolean;
-  labels?: { edit?: string; follow?: string };
-  showRememberChoice?: boolean;
-};
 
 export type EnableOptions = {
   baseEditingUrl: string;
@@ -60,7 +46,6 @@ export type EnableOptions = {
   hoverLingerMs?: number;
   mergeSegments?: 'proximity' | 'always' | 'never';
   mergeProximity?: EdgePadding;
-  clickConflict?: ClickConflictOptions;
 };
 
 type ResolvedMatch = {
@@ -70,8 +55,6 @@ type ResolvedMatch = {
   cursorElement: Element | null;
   initialRects?: OverlayBoxes;
   debugNode?: Element | Text;
-  interactiveElement?: HTMLElement | null;
-  clickOverride?: ClickConflictOverride | null;
 };
 
 type TextMatchContext = {
@@ -230,22 +213,6 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
             event.stopPropagation();
           }
         }
-      },
-      onChoose: (choice, event) => {
-        if (!currentMatch) {
-          return;
-        }
-
-        const mouseEvent = toMouseEvent(event);
-
-        if (choice === 'follow') {
-          followPage(currentMatch, mouseEvent);
-        } else {
-          openDatoLink(currentMatch, mouseEvent);
-        }
-      },
-      onCloseChooser: () => {
-        // Keep hover highlight unless pointer leaves; no-op for now.
       }
     }
   });
@@ -256,7 +223,6 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
   // Short hover linger prevents flicker when the pointer skims padded edges.
   const hoverLingerDelay = Math.max(0, options.hoverLingerMs ?? 0);
   let hoverClearTimer: number | null = null;
-  let suppressNextFollowReplay = false;
 
   const updateOverlayPosition = rafThrottle(() => {
     if (!currentMatch) {
@@ -317,34 +283,13 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
   };
 
   const onClick = (event: MouseEvent) => {
-    if (suppressNextFollowReplay) {
-      return;
-    }
-
     const match = resolvePointerMatch(event);
     if (!match) {
-      overlay.hideChooser();
       return;
     }
 
     cancelHoverClear();
     setCurrentMatch(match);
-
-    const action = determineClickAction(match, event);
-
-    if (action === 'prompt') {
-      event.preventDefault();
-      const rects = match.initialRects && match.initialRects.length ? match.initialRects : match.getRects();
-      overlay.showChooser(rects, { labels: options.clickConflict?.labels });
-      return;
-    }
-
-    if (action === 'follow') {
-      const followResult = followPage(match, event);
-      if (followResult !== false) {
-        return;
-      }
-    }
 
     const shouldPrevent = openDatoLink(match, event);
     if (shouldPrevent !== false) {
@@ -368,25 +313,7 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
     cancelHoverClear();
     setCurrentMatch(match);
 
-    const action = determineClickAction(match, event);
-
-    if (action === 'prompt') {
-      event.preventDefault();
-      const rects = match.initialRects && match.initialRects.length ? match.initialRects : match.getRects();
-      overlay.showChooser(rects, { labels: options.clickConflict?.labels });
-      return;
-    }
-
     const syntheticClick = toMouseEvent(event);
-
-    if (action === 'follow') {
-      const followResult = followPage(match, syntheticClick);
-      if (followResult !== false) {
-        event.preventDefault();
-        return;
-      }
-    }
-
     const shouldPrevent = openDatoLink(match, syntheticClick);
     if (shouldPrevent !== false) {
       event.preventDefault();
@@ -411,14 +338,14 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
       if (explicitMatch) {
         const resolvedExplicit = createExplicitMatch(explicitMatch);
         if (resolvedExplicit) {
-          return applyClickContext(resolvedExplicit, origin);
+          return resolvedExplicit;
         }
       }
       const imageMatch = observer.getImageMatch(origin);
       if (imageMatch) {
         const resolved = createImageMatch(imageMatch);
         if (resolved) {
-          return applyClickContext(resolved, origin);
+          return resolved;
         }
       }
     }
@@ -426,16 +353,16 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
     if (Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
       const explicitAtPoint = resolveExplicitMatchAtPoint(event.clientX, event.clientY);
       if (explicitAtPoint) {
-        return applyClickContext(explicitAtPoint, origin);
+        return explicitAtPoint;
       }
       const imgAtPoint = resolveImageMatchAtPoint(event.clientX, event.clientY);
       if (imgAtPoint) {
-        return applyClickContext(imgAtPoint, origin);
+        return imgAtPoint;
       }
 
       const textAtPoint = resolveTextMatchAtPoint(event.clientX, event.clientY);
       if (textAtPoint) {
-        return applyClickContext(textAtPoint, origin);
+        return textAtPoint;
       }
     }
 
@@ -533,14 +460,14 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
     if (explicitMatch) {
       const resolved = createExplicitMatch(explicitMatch);
       if (resolved) {
-        return applyClickContext(resolved, target);
+        return resolved;
       }
     }
 
     const imageMatch = observer.getImageMatch(target);
     if (imageMatch) {
       const resolved = createImageMatch(imageMatch);
-      return resolved ? applyClickContext(resolved, target) : null;
+      return resolved ?? null;
     }
 
     const candidates = observer.getTextMatchesWithin(target);
@@ -549,7 +476,7 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
       if (context.rects.length) {
         const resolved = createTextMatch(candidate, context);
         if (resolved) {
-          return applyClickContext(resolved, target);
+          return resolved;
         }
       }
     }
@@ -801,7 +728,6 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
 
   function setCurrentMatch(match: ResolvedMatch): void {
     cancelHoverClear();
-    overlay.hideChooser();
     currentMatch = match;
     if (match.cursorElement) {
       applyPointerCursor(match.cursorElement);
@@ -825,15 +751,11 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
   function performClear(): void {
     currentMatch = null;
     overlay.hide();
-    overlay.hideChooser();
     restorePointerCursor();
   }
 
   function scheduleHoverClear(): void {
     if (!currentMatch) {
-      return;
-    }
-    if (overlay.isChooserOpen()) {
       return;
     }
     if (hoverLingerDelay === 0) {
@@ -854,38 +776,7 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
     }
   }
 
-  function followPage(match: ResolvedMatch, event: MouseEvent): boolean | void {
-    overlay.hideChooser();
-
-    const proceed = options.onBeforeOpen ? options.onBeforeOpen('(page-follow)', event) : undefined;
-    if (proceed === false) {
-      return false;
-    }
-
-    const element = match.interactiveElement
-      ?? (isHTMLElement(match.cursorElement) ? match.cursorElement : null);
-
-    if (!element || !element.isConnected) {
-      return false;
-    }
-
-    event.preventDefault();
-
-    suppressNextFollowReplay = true;
-
-    setTimeout(() => {
-      try {
-        element.click();
-      } finally {
-        suppressNextFollowReplay = false;
-      }
-    }, 0);
-
-    return true;
-  }
-
   function openDatoLink(match: ResolvedMatch, event: MouseEvent): boolean | void {
-    overlay.hideChooser();
     if (options.debug) {
       console.log('[datocms-visual-editing][debug] overlay click', {
         eventType: event.type,
@@ -908,84 +799,6 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
     return true;
   }
 
-  type ClickAction = 'edit' | 'follow' | 'prompt';
-
-  function determineClickAction(match: ResolvedMatch, event: MouseEvent | KeyboardEvent): ClickAction {
-    const override = match.clickOverride ?? null;
-
-    if (override === 'ignore') {
-      return 'edit';
-    }
-    if (override === 'prefer-page') {
-      return 'follow';
-    }
-    if (override === 'prefer-dato') {
-      return 'edit';
-    }
-
-    const interactive = Boolean(match.interactiveElement);
-
-    if (!interactive) {
-      return 'edit';
-    }
-
-    if (override === 'prompt') {
-      return 'prompt';
-    }
-
-    const mode = options.clickConflict?.mode ?? 'prefer-dato';
-
-    if (mode === 'prefer-page') {
-      return 'follow';
-    }
-
-    if (mode === 'prompt') {
-      return 'prompt';
-    }
-
-    if (mode === 'modifier') {
-      const followPressed = isModifierActive(options.clickConflict?.modifierForPage, event);
-      const datoPressed = isModifierActive(options.clickConflict?.modifierForDato, event);
-
-      if (followPressed) {
-        return 'follow';
-      }
-      if (datoPressed) {
-        return 'edit';
-      }
-
-      const hasDatoModifier = Boolean(options.clickConflict?.modifierForDato);
-      const hasPageModifier = Boolean(options.clickConflict?.modifierForPage);
-
-      if (hasDatoModifier && !hasPageModifier) {
-        return 'follow';
-      }
-
-      return 'edit';
-    }
-
-    return 'edit';
-  }
-
-  function isModifierActive(modifier: ClickModifier | undefined, event: MouseEvent | KeyboardEvent): boolean {
-    if (!modifier) {
-      return false;
-    }
-
-    switch (modifier) {
-      case 'alt':
-        return event.altKey;
-      case 'meta':
-        return event.metaKey;
-      case 'ctrl':
-        return event.ctrlKey;
-      case 'shift':
-        return event.shiftKey;
-      default:
-        return false;
-    }
-  }
-
   function toMouseEvent(event: MouseEvent | KeyboardEvent): MouseEvent {
     if (event instanceof MouseEvent) {
       return event;
@@ -999,61 +812,6 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
       metaKey: event.metaKey,
       shiftKey: event.shiftKey
     });
-  }
-
-  function applyClickContext(match: ResolvedMatch, origin: Element | null): ResolvedMatch {
-    const interactive = resolveInteractiveElement(origin ?? match.cursorElement ?? null);
-    match.interactiveElement = interactive ?? null;
-
-    const overrideSource = origin ?? match.cursorElement ?? interactive ?? null;
-    match.clickOverride = readClickConflictOverride(overrideSource);
-
-    return match;
-  }
-
-  function resolveInteractiveElement(origin: Element | null): HTMLElement | null {
-    if (!origin) {
-      return null;
-    }
-
-    const builtin = findInteractiveAncestor(origin);
-    if (builtin) {
-      return builtin;
-    }
-
-    const detector = options.clickConflict?.detector;
-    if (!detector) {
-      return null;
-    }
-
-    let current: Element | null = origin;
-    while (current && current !== document.documentElement && current !== document.body) {
-      let matches = false;
-      try {
-        matches = Boolean(detector(current));
-      } catch (error) {
-        matches = false;
-      }
-
-      if (matches) {
-        if (current instanceof HTMLElement) {
-          return current;
-        }
-
-        let ancestor: Element | null = current.parentElement;
-        while (ancestor && !(ancestor instanceof HTMLElement)) {
-          ancestor = ancestor.parentElement;
-        }
-
-        if (ancestor instanceof HTMLElement) {
-          return ancestor;
-        }
-      }
-
-      current = current.parentElement;
-    }
-
-    return null;
   }
 
   const dispose = () => {

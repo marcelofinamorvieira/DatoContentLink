@@ -10,8 +10,6 @@ export const DATA_ATTR_ITEM_TYPE_ID = 'data-datocms-item-type-id';
 export const DATA_ATTR_EDIT_URL = 'data-datocms-edit-url';
 export const DATA_ATTR_ENV = 'data-datocms-environment';
 export const DATA_ATTR_LOCALE = 'data-datocms-locale';
-export const DATA_ATTR_CLICK_CONFLICT = 'data-datocms-click-conflict';
-export const DATA_ATTR_ALLOW_FOLLOW = 'data-datocms-allow-follow';
 export const FIELD_PATH_ATTR = 'data-datocms-field-path';
 export const EXPLICIT_ATTRIBUTE_NAMES = [
   DATA_ATTR_EDIT_INFO,
@@ -19,9 +17,7 @@ export const EXPLICIT_ATTRIBUTE_NAMES = [
   DATA_ATTR_ITEM_TYPE_ID,
   DATA_ATTR_EDIT_URL,
   DATA_ATTR_ENV,
-  DATA_ATTR_LOCALE,
-  DATA_ATTR_CLICK_CONFLICT,
-  DATA_ATTR_ALLOW_FOLLOW
+  DATA_ATTR_LOCALE
 ];
 
 const TARGET_ATTRS: TargetAttribute[] = ['data-datocms-edit-target', 'data-vercel-edit-target'];

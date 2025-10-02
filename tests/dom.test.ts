@@ -452,6 +452,47 @@ describe('enableDatoVisualEditing', () => {
     dispose();
   });
 
+  it('prefers explicit field path attribute when present', async () => {
+    const wrapper = document.createElement('div');
+    wrapper.getBoundingClientRect = () => createRect(20, 30, 160, 50);
+    wrapper.setAttribute('data-datocms-edit-target', '');
+    wrapper.setAttribute(
+      'data-datocms-edit-info',
+      JSON.stringify({
+        itemId: 'record_700',
+        itemTypeId: 'stat',
+        fieldPath: 'stats.count',
+        editUrl: 'https://acme.admin.datocms.com/editor/item_types/stat/items/record_700/edit#fieldPath=stats.count',
+        locale: 'en'
+      })
+    );
+    wrapper.setAttribute('data-datocms-field-path', 'stats.total');
+    wrapper.textContent = 'Total stats';
+    document.body.appendChild(wrapper);
+
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    const dispose = enableDatoVisualEditing({
+      baseEditingUrl: 'https://acme.admin.datocms.com',
+      activate: 'always',
+      overlays: 'hover',
+      showBadge: false,
+      openInNewTab: false,
+      hoverLingerMs: 0
+    });
+
+    wrapper.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 60, clientY: 45 }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    wrapper.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 60, clientY: 45 }));
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://acme.admin.datocms.com/editor/item_types/stat/items/record_700/edit#fieldPath=stats.total.en',
+      '_self'
+    );
+
+    dispose();
+  });
+
   it('keeps matches after stega markers are stripped', async () => {
     const payload = {
       cms: 'datocms',
@@ -588,4 +629,5 @@ describe('enableDatoVisualEditing', () => {
 
     dispose();
   });
+
 });

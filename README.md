@@ -199,50 +199,7 @@ The initializer returns a disposer if you need to tear everything down (SPA rout
 - `showBadge`: toggle the badge. When enabled, it’s clickable + keyboard accessible (`Enter` / `Space`).
 - Respect for `prefers-reduced-motion` disables outline animations automatically.
 
-### Handling click conflicts (Edit vs follow)
-
-By default, clicking an overlayed element opens the matching record in DatoCMS. When the underlying element is interactive (a link, button, form control, `role="button"`, etc.) you can prompt the user or reroute the click with the `clickConflict` options:
-
-```ts
-enableDatoVisualEditing({
-  baseEditingUrl: 'https://acme.admin.datocms.com',
-  clickConflict: {
-    mode: 'prompt',
-    labels: { edit: 'Edit in Dato', follow: 'Follow click' }
-  }
-});
-```
-
-Available modes:
-
-- `'prefer-dato'` (default): maintain legacy behaviour—always open Dato, even when the element is interactive.
-- `'prefer-page'`: automatically follow the page’s native click/navigation when a conflict is detected.
-- `'prompt'`: render a two-action chooser inside the overlay so the user can decide (`Edit` vs `Follow`). Keyboard support: `Tab` cycles, `Enter`/`Space` activates, `Esc` closes the chooser.
-- `'modifier'`: keep the default action but let a modifier swap it. Use `modifierForPage` and/or `modifierForDato` (values: `'alt' | 'meta' | 'ctrl' | 'shift'`). If only `modifierForDato` is defined the unmodified click follows the page, otherwise the unmodified click opens Dato.
-
-Advanced knobs:
-
-- `detector(element)`: return `true` to treat custom elements as “interactive” on top of the built-in heuristics (native buttons, anchors with `href`, `role="button"` with focusability, `[onclick]`, focusable elements, `cursor:pointer`).
-- `labels`: customise the chooser button text.
-
-Per-element overrides take precedence over the global mode:
-
-```html
-<!-- Always prompt on this CTA -->
-<a href="/checkout" data-datocms-click-conflict="prompt" data-datocms-edit-target>Buy now</a>
-
-<!-- Force-follow the underlying link without showing the chooser -->
-<button data-datocms-allow-follow data-datocms-edit-target>Submit</button>
-
-<!-- Prefer Dato for this element even if the global mode is 'prefer-page' -->
-<div data-datocms-click-conflict="prefer-dato" data-datocms-edit-target>
-  ...
-</div>
-```
-
-The recognised override values are `prompt`, `prefer-page`, `prefer-dato`, and `ignore` (treated as “no conflict”). `data-datocms-allow-follow` is a shorthand for `prefer-page`.
-
-When you opt to follow the page, the library replays the original click after your handler finishes. If you use the `onBeforeOpen(url, event)` hook, it will receive `'(page-follow)'` as the URL for these replays so you can veto the follow behaviour as well.
+Clicks (or keyboard activation using `Enter`/`Space`) always open the matching record in DatoCMS. Use `openInNewTab` to choose between a new tab (`true`, default) or the current tab (`false`).
 
 ### Debug mode
 
@@ -434,6 +391,8 @@ const attrs = buildEditTagAttributes({ fieldPath: 'sale_price', locale: 'en' });
 // payload.fieldPath === 'sale_price.en'
 ```
 
+`fieldPath` accepts dot strings (`'promo.title'`), individual numbers (`0`), or arrays of those segments (e.g. `['blocks', 0, 'title']`). Other shapes are ignored to avoid ambiguous ordering in the resulting hash.
+
 **Always supply a `locale`.** The overlays rely on it to route clicks to the correct localized value; the helper appends it to the resolved field path (without duplicating it) and rewrites any existing `editUrl` hash so the editor opens the localized field.
 
 `data-datocms-field-path` (if present) overrides any `fieldPath` provided via JSON or split attributes.
@@ -464,6 +423,7 @@ When you call `buildEditTagAttributes(info, 'attrs')`, set `data-datocms-field-p
 | `stripStega(text)` | Removes hidden characters so you can measure text without re-rendering. |
 | `buildEditTagAttributes(info, format?)` | Returns the `data-datocms-*` attrs needed to opt-in overlays for non-text elements. |
 | `applyEditTagAttributes(element, info, format?)` | Imperatively stamp the same attributes onto a DOM node. |
+| `buildDatoDeepLink(info, baseEditingUrl, environment?)` | Produces the editor URL (with locale-aware `#fieldPath`) for badges and custom tooling. |
 | `useDatoAutoClean(ref, options?)` *(import from `datocms-visual-editing/react`)* | React hook that runs `autoCleanStegaWithin` on a ref’d element. |
 | `<DatoAutoClean {...} />` *(import from `datocms-visual-editing/react`)* | React component wrapper that auto-cleans its subtree and sets the discovery attribute. |
 
