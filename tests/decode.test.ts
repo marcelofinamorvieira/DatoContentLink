@@ -34,6 +34,28 @@ describe('decodeStega', () => {
   it('returns null for strings without stega metadata', () => {
     expect(decodeStega('Plain text')).toBeNull();
   });
+
+  it('derives DatoCMS metadata from href-only payloads', () => {
+    const payload = {
+      origin: 'datocms.com',
+      href:
+        'https://acme.admin.datocms.com/environments/staging/editor/item_types/article/items/456/edit#fieldPath=sections.en.0.hero_title'
+    };
+
+    const encoded = vercelStegaCombine('Dato content', payload);
+    const info = decodeStega(encoded);
+
+    expect(info).toEqual({
+      cms: 'datocms',
+      itemId: '456',
+      itemTypeId: 'article',
+      fieldPath: 'sections.en.0.hero_title',
+      locale: null,
+      environment: 'staging',
+      editUrl: payload.href,
+      raw: payload
+    });
+  });
 });
 
 describe('stripStega', () => {

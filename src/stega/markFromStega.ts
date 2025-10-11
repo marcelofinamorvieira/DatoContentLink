@@ -14,7 +14,15 @@ type MarkContext = {
 };
 
 export function markDOMFromStega(ctx: MarkContext): void {
-  const doc = ctx.root instanceof Document ? ctx.root : ctx.root.ownerDocument ?? document;
+  const docCtor = typeof Document !== 'undefined' ? Document : undefined;
+  const globalDoc = typeof document !== 'undefined' ? document : undefined;
+  const doc =
+    (docCtor && ctx.root instanceof docCtor ? (ctx.root as Document) : ctx.root.ownerDocument ?? globalDoc) ?? null;
+
+  if (!doc) {
+    return;
+  }
+
   const walker = doc.createTreeWalker(ctx.root, NodeFilter.SHOW_TEXT);
 
   const textNodes: Text[] = [];
@@ -78,7 +86,9 @@ export function markDOMFromStega(ctx: MarkContext): void {
     }
   }
 
-  const scope = ctx.root as ParentNode & { querySelectorAll: typeof document.querySelectorAll };
+  const scope = ctx.root as ParentNode & {
+    querySelectorAll: typeof document.querySelectorAll;
+  };
   scope.querySelectorAll('img[alt]').forEach((node) => {
     const img = node as HTMLImageElement;
     const alt = img.getAttribute('alt');
