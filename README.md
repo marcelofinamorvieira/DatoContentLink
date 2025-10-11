@@ -100,12 +100,24 @@ type EnableDatoVisualEditingOptions = {
   baseEditingUrl: string;   // required
   environment?: string;     // optional environment slug for diagnostics + deep links
   root?: ParentNode;        // restrict scanning/observation to a subtree (default: document)
+  debug?: boolean;          // expose debug attributes for in-browser inspection (default: false)
 };
 ```
 
 Returns a disposer that removes overlays, observers, and generated attributes.
 
 > **SPA note:** call the disposer on route changes if you mount/unmount the preview surface manually.
+
+### Debug inspection toggle
+
+Pass `debug: true` to stamp additional diagnostics on every editable element and any explicit `data-datocms-edit-url` you authored yourself. The library adds:
+
+- `data-datocms-debug="on"`
+- `data-datocms-debug-reason` (`"stega"` when derived from steganographic payloads, `"explicit"` for attributes you authored)
+- `data-datocms-debug-url` (the resolved deep link)
+- `data-datocms-debug-info` (JSON payload with the decoded metadata)
+
+These attributes make it easy to inspect the resolved editing info directly in DevTools. They are removed automatically when you call the disposer returned by `enableDatoVisualEditing`.
 
 ### `withContentLinkHeaders(fetchLike)`
 
