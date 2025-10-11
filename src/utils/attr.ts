@@ -1,15 +1,20 @@
 import { DecodedInfo } from '../decode/types.js';
 import { normalizeFieldPath } from '../link/fieldPath.js';
-
-export type TargetAttribute = 'data-datocms-edit-target' | 'data-vercel-edit-target';
+import {
+  ATTR_EDIT_URL,
+  ATTR_ITEM_ID,
+  ATTR_ITEM_TYPE_ID,
+  ATTR_ENV,
+  ATTR_LOCALE
+} from '../constants.js';
 
 export const AUTO_CLEAN_ATTR = 'data-datocms-auto-clean';
 export const DATA_ATTR_EDIT_INFO = 'data-datocms-edit-info';
-export const DATA_ATTR_ITEM_ID = 'data-datocms-item-id';
-export const DATA_ATTR_ITEM_TYPE_ID = 'data-datocms-item-type-id';
-export const DATA_ATTR_EDIT_URL = 'data-datocms-edit-url';
-export const DATA_ATTR_ENV = 'data-datocms-environment';
-export const DATA_ATTR_LOCALE = 'data-datocms-locale';
+export const DATA_ATTR_ITEM_ID = ATTR_ITEM_ID;
+export const DATA_ATTR_ITEM_TYPE_ID = ATTR_ITEM_TYPE_ID;
+export const DATA_ATTR_EDIT_URL = ATTR_EDIT_URL;
+export const DATA_ATTR_ENV = ATTR_ENV;
+export const DATA_ATTR_LOCALE = ATTR_LOCALE;
 export const FIELD_PATH_ATTR = 'data-datocms-field-path';
 export const EXPLICIT_ATTRIBUTE_NAMES = [
   DATA_ATTR_EDIT_INFO,
@@ -19,27 +24,6 @@ export const EXPLICIT_ATTRIBUTE_NAMES = [
   DATA_ATTR_ENV,
   DATA_ATTR_LOCALE
 ];
-
-const TARGET_ATTRS: TargetAttribute[] = ['data-datocms-edit-target', 'data-vercel-edit-target'];
-
-export function resolveHighlightContainer(element: Element, preferred: TargetAttribute): Element {
-  const attributes = preferred === 'data-vercel-edit-target'
-    ? ['data-vercel-edit-target', 'data-datocms-edit-target']
-    : ['data-datocms-edit-target', 'data-vercel-edit-target'];
-
-  for (const attr of attributes) {
-    const container = element.closest(`[${attr}]`);
-    if (container && container !== document.body && container !== document.documentElement) {
-      return container;
-    }
-  }
-
-  return element;
-}
-
-export function hasDatoTarget(element: Element): boolean {
-  return TARGET_ATTRS.some((attr) => element.hasAttribute(attr));
-}
 
 export function readExplicitInfo(element: Element): DecodedInfo | null {
   const jsonRaw = element.getAttribute(DATA_ATTR_EDIT_INFO);

@@ -109,4 +109,43 @@ describe('withContentLinkHeaders', () => {
     expect(headers.get('X-Base-Editing-Url')).toBe(defaultUrl);
     expect(headers.get('X-Visual-Editing')).toBe('vercel-v1');
   });
+
+  it('accepts lowercase x-base-editing-url header without overriding', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+    const fetchWithHeaders = withContentLinkHeaders(mockFetch as unknown as typeof fetch);
+
+    await fetchWithHeaders('https://example.com/graphql', {
+      headers: { 'x-base-editing-url': 'https://acme.admin.datocms.com' }
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [, callInit] = mockFetch.mock.calls[0] as [RequestInfo | URL, RequestInit];
+    const headers = callInit.headers as Headers;
+    expect(headers.get('X-Base-Editing-Url')).toBe('https://acme.admin.datocms.com');
+  });
+
+  it('preserves referrerPolicy when cloning Request inputs', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+    const defaultUrl = 'https://acme.admin.datocms.com';
+    const fetchWithHeaders = withContentLinkHeaders(
+      mockFetch as unknown as typeof fetch,
+      defaultUrl
+    );
+
+    const request = new Request('https://example.com/graphql', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer abc' },
+      referrer: 'https://preview.example.com/page',
+      referrerPolicy: 'strict-origin-when-cross-origin'
+    });
+
+    await fetchWithHeaders(request, {
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [callRequest] = mockFetch.mock.calls[0] as [Request];
+    expect(callRequest instanceof Request).toBe(true);
+    expect(callRequest.referrerPolicy).toBe('strict-origin-when-cross-origin');
+  });
 });

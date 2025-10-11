@@ -82,8 +82,19 @@ describe('buildDatoDeepLink', () => {
     );
   });
 
-  it('throws when editUrl is different origin and itemId is missing', () => {
-    const info = baseInfo({ itemId: '', editUrl: 'https://other.example.com/editor/items/abc' });
+  it('returns cross-origin editUrl when itemId is missing', () => {
+    const info = baseInfo({ itemId: '', editUrl: 'https://other.example.com/editor/items/abc?ref=preview' });
+    expect(buildDatoDeepLink(info, BASE)).toBe('https://other.example.com/editor/items/abc?ref=preview');
+  });
+
+  it('does not merge locale into a foreign editUrl', () => {
+    const editUrl = 'https://other.example.com/editor/items/abc#fieldPath=title';
+    const info = baseInfo({ itemId: '', editUrl, locale: 'pt-BR' });
+    expect(buildDatoDeepLink(info, BASE)).toBe(editUrl);
+  });
+
+  it('throws when both itemId and editUrl are missing', () => {
+    const info = baseInfo({ itemId: '' });
     expect(() => buildDatoDeepLink(info, BASE)).toThrow('Cannot build deep link without itemId or editUrl');
   });
 });

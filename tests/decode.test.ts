@@ -31,30 +31,6 @@ describe('decodeStega', () => {
     });
   });
 
-  it('accepts alternate key shapes and parses IDs from URLs', () => {
-    const url = 'https://acme.admin.datocms.com/editor/item_types/article/items/987/edit#fieldPath=content';
-
-    const payload = {
-      record_id: '987',
-      item_type_id: 'article',
-      path: 'content',
-      env: 'preview',
-      url
-    };
-
-    const encoded = vercelStegaCombine('Body copy', payload);
-    const info = decodeStega(encoded);
-
-    expect(info).toMatchObject({
-      cms: 'datocms',
-      itemId: '987',
-      itemTypeId: 'article',
-      fieldPath: 'content',
-      environment: 'preview',
-      editUrl: url
-    });
-  });
-
   it('returns null for strings without stega metadata', () => {
     expect(decodeStega('Plain text')).toBeNull();
   });

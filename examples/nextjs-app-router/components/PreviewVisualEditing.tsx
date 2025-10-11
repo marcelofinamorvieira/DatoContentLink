@@ -12,10 +12,7 @@ export function PreviewVisualEditing({ baseEditingUrl, environment }: PreviewVis
   useEffect(() => {
     const disposeVisualEditing = enableDatoVisualEditing({
       baseEditingUrl,
-      environment,
-      activate: 'always',
-      overlays: 'hover',
-      targetAttribute: 'data-datocms-edit-target'
+      environment
     });
 
     return () => {

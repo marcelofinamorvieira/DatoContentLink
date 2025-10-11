@@ -24,8 +24,9 @@
   <body>
     <h1>DatoCMS Visual Editing (Plain JS)</h1>
     <p>
-      Append <code>?edit=1</code> to the URL to activate overlays. This demo assumes
-      you fetched content from DatoCMS with the required visual editing headers.
+      Enable overlays by calling <code>enableDatoVisualEditing</code> after your page renders with
+      stega content from DatoCMS. This demo assumes you fetched content with the required visual
+      editing headers.
     </p>
 
     <article class="card" data-datocms-edit-target>
@@ -82,11 +83,7 @@
       });
 
       enableDatoVisualEditing({
-        baseEditingUrl: BASE_EDITING_URL,
-        activate: 'query',
-        overlays: 'hover',
-        showBadge: true,
-        targetAttribute: 'data-datocms-edit-target'
+        baseEditingUrl: BASE_EDITING_URL
       });
     </script>
   </body>

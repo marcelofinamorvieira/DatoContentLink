@@ -6,9 +6,6 @@ export type UseDatoAutoCleanOptions = AutoCleanOptions;
 
 /**
  * React hook that runs {@link autoCleanStegaWithin} on the element referenced by `ref`.
- *
- * Keep `persistAfterClean` enabled on `enableDatoVisualEditing` (default) so overlays stay
- * interactive after the stega markers are removed.
  */
 export function useDatoAutoClean<T extends Element>(
   ref: RefObject<T | null>,

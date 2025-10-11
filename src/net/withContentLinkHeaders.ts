@@ -11,10 +11,12 @@ export function withContentLinkHeaders(
     });
 
     headers.set('X-Visual-Editing', 'vercel-v1');
-    if (!headers.has('X-Base-Editing-Url') && defaultBaseEditingUrl) {
+    let baseEditingUrl = headers.get('X-Base-Editing-Url') ?? headers.get('x-base-editing-url');
+    if (!baseEditingUrl && defaultBaseEditingUrl) {
       headers.set('X-Base-Editing-Url', defaultBaseEditingUrl);
+      baseEditingUrl = defaultBaseEditingUrl;
     }
-    if (!headers.has('X-Base-Editing-Url')) {
+    if (!baseEditingUrl) {
       throw new Error('X-Base-Editing-Url missing');
     }
 
@@ -22,6 +24,9 @@ export function withContentLinkHeaders(
       ...init,
       headers
     };
+    if (input instanceof Request && finalInit.referrerPolicy === undefined) {
+      finalInit.referrerPolicy = input.referrerPolicy;
+    }
 
     const initWithDuplex = init as RequestInit & { duplex?: unknown };
     if (initWithDuplex.duplex !== undefined) {

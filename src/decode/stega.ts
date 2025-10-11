@@ -1,61 +1,6 @@
 import { vercelStegaDecode, vercelStegaSplit } from '@vercel/stega';
 import { DecodedInfo } from './types.js';
 
-const ITEM_ID_KEYS = ['itemId', 'item_id', 'recordId', 'record_id', 'id'];
-const ITEM_TYPE_ID_KEYS = ['itemTypeId', 'item_type_id', 'modelId', 'model_id', 'itemType'];
-const FIELD_PATH_KEYS = ['fieldPath', 'field_path', 'field', 'path'];
-const LOCALE_KEYS = ['locale', 'language', 'lang'];
-const ENVIRONMENT_KEYS = ['environment', 'env'];
-const EDIT_URL_KEYS = ['editUrl', 'url', 'href'];
-
-const DATO_HOST_PATTERN = /\.datocms\.com\/?/i;
-const ITEM_ID_FROM_URL = /\/items\/([^/?#]+)/;
-const ITEM_TYPE_FROM_URL = /\/item_types\/([^/]+)/;
-const ENV_FROM_URL = /\/environments\/([^/]+)/;
-
-function pickString(source: unknown, keys: readonly string[]): string | undefined {
-  if (!source || typeof source !== 'object') {
-    return undefined;
-  }
-
-  for (const key of keys) {
-    const value = (source as Record<string, unknown>)[key];
-    if (typeof value === 'string' && value.trim().length > 0) {
-      return value.trim();
-    }
-  }
-  return undefined;
-}
-
-function normalizeLocale(value: string | undefined): string | null {
-  if (!value) {
-    return null;
-  }
-  return value.trim() || null;
-}
-
-function extractFromUrl(url: string) {
-  const itemIdMatch = ITEM_ID_FROM_URL.exec(url);
-  const itemTypeMatch = ITEM_TYPE_FROM_URL.exec(url);
-  const envMatch = ENV_FROM_URL.exec(url);
-  return {
-    itemId: itemIdMatch?.[1],
-    itemTypeId: itemTypeMatch?.[1],
-    environment: envMatch?.[1]
-  } as const;
-}
-
-export function stripStega(
-  input: string,
-  split?: ReturnType<typeof vercelStegaSplit>
-): string {
-  if (!input) {
-    return '';
-  }
-  const resolvedSplit = split ?? vercelStegaSplit(input);
-  return resolvedSplit.cleaned;
-}
-
 export function decodeStega(
   input: string,
   split?: ReturnType<typeof vercelStegaSplit>
@@ -69,23 +14,25 @@ export function decodeStega(
     return null;
   }
 
-  let raw: unknown;
+  let decoded: unknown;
   try {
-    raw = vercelStegaDecode(resolvedSplit.encoded);
-  } catch (error) {
+    decoded = vercelStegaDecode(resolvedSplit.encoded);
+  } catch {
     return null;
   }
 
-  const editUrlCandidate = pickString(raw, EDIT_URL_KEYS);
-  const editUrl = editUrlCandidate && DATO_HOST_PATTERN.test(editUrlCandidate) ? editUrlCandidate : undefined;
+  if (!decoded || typeof decoded !== 'object') {
+    return null;
+  }
 
-  const fromUrl = editUrl ? extractFromUrl(editUrl) : undefined;
+  const data = decoded as Record<string, unknown>;
 
-  const itemId = pickString(raw, ITEM_ID_KEYS) ?? fromUrl?.itemId;
-  const itemTypeId = pickString(raw, ITEM_TYPE_ID_KEYS) ?? fromUrl?.itemTypeId;
-  const fieldPath = pickString(raw, FIELD_PATH_KEYS);
-  const locale = normalizeLocale(pickString(raw, LOCALE_KEYS));
-  const environment = normalizeLocale(pickString(raw, ENVIRONMENT_KEYS) ?? fromUrl?.environment);
+  const itemId = string(data.itemId);
+  const itemTypeId = string(data.itemTypeId);
+  const fieldPath = string(data.fieldPath);
+  const environment = string(data.environment) ?? null;
+  const locale = string(data.locale) ?? null;
+  const editUrl = string(data.editUrl);
 
   if (!itemId && !editUrl) {
     return null;
@@ -96,11 +43,31 @@ export function decodeStega(
     itemId: itemId ?? '',
     itemTypeId,
     fieldPath,
-    locale,
     environment,
+    locale,
     editUrl,
-    raw
+    raw: decoded
   };
 
   return info;
+}
+
+export function stripStega(
+  input: string,
+  split?: ReturnType<typeof vercelStegaSplit>
+): string {
+  if (!input) {
+    return '';
+  }
+
+  const resolvedSplit = split ?? vercelStegaSplit(input);
+  return resolvedSplit.cleaned ?? input;
+}
+
+function string(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }

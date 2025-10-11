@@ -49,6 +49,10 @@ export function buildDatoDeepLink(info: DecodedInfo, baseEditingUrl: string, env
   const itemId = info.itemId;
 
   if (!itemId) {
+    // Honor fully-qualified edit URLs even when they target a different origin.
+    if (info.editUrl) {
+      return info.editUrl;
+    }
     throw new Error('Cannot build deep link without itemId or editUrl');
   }
 

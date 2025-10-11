@@ -1,4 +1,4 @@
-import { splitStegaCached } from '../decode/splitCache.js';
+import { splitStega } from '../stega/split.js';
 import { AUTO_CLEAN_ATTR } from '../utils/attr.js';
 
 export type AutoCleanOptions = {
@@ -110,7 +110,7 @@ function cleanPass(root: Element, opts: Required<AutoCleanOptions>): void {
     const parent = node.parentElement;
     const value = node.nodeValue ?? '';
     if (value && !isSkipped(parent, opts.skipSelectors)) {
-      const split = splitStegaCached(value);
+      const split = splitStega(value);
       if (split.encoded && split.cleaned !== value) {
         node.nodeValue = split.cleaned;
       }
@@ -131,7 +131,7 @@ function cleanPass(root: Element, opts: Required<AutoCleanOptions>): void {
     if (!alt) {
       return;
     }
-    const split = splitStegaCached(alt);
+    const split = splitStega(alt);
     if (split.encoded && split.cleaned !== alt) {
       img.setAttribute('alt', split.cleaned);
     }

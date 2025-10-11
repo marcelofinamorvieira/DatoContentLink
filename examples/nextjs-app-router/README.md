@@ -15,6 +15,4 @@ This minimal example shows how to wire up DatoCMS Visual Editing inside a Next.j
    - `DATO_API_TOKEN` (Content Delivery token)
    - `DATO_PREVIEW_API_TOKEN` (Preview Content token)
    - `NEXT_PUBLIC_DATO_BASE_EDITING_URL` (eg. `https://acme.admin.datocms.com`)
-3. Enable preview (`/api/preview`) so `draftMode` flips on, then open a page with `?edit=1`.
-
-Because `PreviewVisualEditing` forces `activate: 'always'`, overlays only mount when the component renders (ie. in preview pages). Adjust to taste if you prefer URL or localStorage toggles.
+3. Enable preview (`/api/preview`) so `draftMode` flips on, then open a preview page—the component mounts overlays automatically.

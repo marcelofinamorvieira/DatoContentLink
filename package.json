@@ -30,7 +30,7 @@
   "sideEffects": false,
   "scripts": {
     "clean": "rimraf dist",
-    "build": "tsc -p tsconfig.json",
+    "build": "pnpm run clean && tsc -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "prepublishOnly": "pnpm run build && pnpm run test"
@@ -69,7 +69,8 @@
   "packageManager": "pnpm@9.6.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/marcelofinamorvieira/DatoContentLink.git"
+    "url": "https://github.com/marcelofinamorvieira/DatoContentLink.git",
+    "directory": "datocms-visual-editing"
   },
   "bugs": {
     "url": "https://github.com/marcelofinamorvieira/DatoContentLink/issues"
