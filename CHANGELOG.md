@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.7.0 - 2025-10-10
+- Improved stega cleanup performance by reusing `vercelStegaSplit` results across auto-clean and observer flows (fewer allocations during mutation bursts).
+- Hardened overlay launches by opening new-tab links with `noopener,noreferrer` and refreshing overlay geometry via `ResizeObserver`.
+- Added an optional default `X-Base-Editing-Url` parameter to `withContentLinkHeaders` for friendlier setup.
+- Polished overlay accessibility (`aria-live` root, `aria-hidden` segments) and refreshed docs around activation toggles.
+- Declared the Node ≥ 18 engine requirement in `package.json`.
+- Added `badgeLabel` for overlay localization, tightened focus hand-off when navigating in the same tab, and expanded `onBeforeOpen` with the resolved metadata payload.
+- Preserved custom `fetch` `duplex` options and added coverage for query toggles, badge accessibility, min hit sizes, and Request bodies in `withContentLinkHeaders`.
+
 ## 0.6.0 - 2025-10-01
 - **Breaking:** removed the click-conflict feature and `EnableOptions.clickConflict`, so overlay clicks always open the resolved DatoCMS deep link (with `openInNewTab` still respected).
 - Dropped the conflict chooser UI, interactive heuristics, and the `data-datocms-click-conflict` / `data-datocms-allow-follow` overrides.

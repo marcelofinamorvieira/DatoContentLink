@@ -30,10 +30,11 @@ export type EnableOptions = {
   activationStorageKey?: string;
   overlays?: 'always' | 'hover' | 'off';
   showBadge?: boolean;
+  badgeLabel?: string;
   targetAttribute?: TargetAttribute;
   onResolveUrl?: (info: DecodedInfo) => string | null;
   openInNewTab?: boolean;
-  onBeforeOpen?: (url: string, ev: MouseEvent) => boolean | void;
+  onBeforeOpen?: (url: string, ev: MouseEvent, info: DecodedInfo) => boolean | void;
   debug?: boolean;
   /**
    * Leave this enabled (default) and pair with AutoClean so overlays remain clickable
@@ -69,6 +70,7 @@ const DEFAULTS = {
   activationStorageKey: 'datocms:ve',
   overlays: 'hover' as const,
   showBadge: true,
+  badgeLabel: 'Open in DatoCMS',
   targetAttribute: 'data-datocms-edit-target' as const,
   openInNewTab: true,
   debug: false,
@@ -183,6 +185,7 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
     hoverLingerMs: number;
     mergeSegments: 'proximity' | 'always' | 'never';
     mergeProximity: EdgePadding;
+    badgeLabel: string;
   };
 
   const baseEditingUrl = normalizeBaseUrl(options.baseEditingUrl);
@@ -200,6 +203,7 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
   const overlay = new OverlayManager({
     mode: options.overlays ?? DEFAULTS.overlays,
     showBadge: options.showBadge ?? DEFAULTS.showBadge,
+    badgeLabel: options.badgeLabel ?? DEFAULTS.badgeLabel,
     callbacks: {
       onActivate: (event) => {
         if (!currentMatch) {
@@ -223,6 +227,9 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
   // Short hover linger prevents flicker when the pointer skims padded edges.
   const hoverLingerDelay = Math.max(0, options.hoverLingerMs ?? 0);
   let hoverClearTimer: number | null = null;
+  let layoutObserver: ResizeObserver | null = null;
+  let matchObserver: ResizeObserver | null = null;
+  let geometryObserverTarget: Element | null = null;
 
   const updateOverlayPosition = rafThrottle(() => {
     if (!currentMatch) {
@@ -248,7 +255,7 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
   });
 
   const onPointerOver = (event: PointerEvent) => {
-    if (event.pointerType === 'touch') {
+    if (event.pointerType && event.pointerType !== 'mouse') {
       return;
     }
     const match = resolvePointerMatch(event);
@@ -261,7 +268,7 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
   };
 
   const onPointerMove = (event: PointerEvent) => {
-    if (event.pointerType === 'touch') {
+    if (event.pointerType && event.pointerType !== 'mouse') {
       return;
     }
     updateMatchFromMove(event);
@@ -326,8 +333,17 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
   document.addEventListener('focusout', onFocusOut, true);
   document.addEventListener('click', onClick, true);
   document.addEventListener('keydown', onKeyDown, true);
+  document.addEventListener('scroll', updateOverlayPosition, true);
   window.addEventListener('scroll', updateOverlayPosition, true);
   window.addEventListener('resize', updateOverlayPosition, true);
+  if (typeof ResizeObserver !== 'undefined' && document.body) {
+    layoutObserver = new ResizeObserver(() => {
+      updateOverlayPosition();
+    });
+    layoutObserver.observe(document.body);
+  }
+  const fonts = (document as Document & { fonts?: { ready?: Promise<unknown> } }).fonts;
+  fonts?.ready?.then(() => updateOverlayPosition());
 
   function resolvePointerMatch(event: PointerEvent | MouseEvent): ResolvedMatch | null {
     const target = event.target;
@@ -741,6 +757,19 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
     } else {
       overlay.hide();
     }
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const geometryTarget = match.cursorElement;
+      if (geometryTarget !== geometryObserverTarget) {
+        matchObserver?.disconnect();
+        matchObserver = null;
+        geometryObserverTarget = geometryTarget ?? null;
+        if (geometryTarget) {
+          matchObserver = new ResizeObserver(() => updateOverlayPosition());
+          matchObserver.observe(geometryTarget);
+        }
+      }
+    }
   }
 
   function clearCurrentMatch(): void {
@@ -752,6 +781,11 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
     currentMatch = null;
     overlay.hide();
     restorePointerCursor();
+    geometryObserverTarget = null;
+    if (matchObserver) {
+      matchObserver.disconnect();
+      matchObserver = null;
+    }
   }
 
   function scheduleHoverClear(): void {
@@ -786,14 +820,15 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
       });
     }
 
-    const proceed = options.onBeforeOpen ? options.onBeforeOpen(match.url, event) : undefined;
+    const proceed = options.onBeforeOpen ? options.onBeforeOpen(match.url, event, match.info) : undefined;
     if (proceed === false) {
       return false;
     }
 
     if (options.openInNewTab ?? DEFAULTS.openInNewTab) {
-      window.open(match.url, '_blank', 'noopener');
+      window.open(match.url, '_blank', 'noopener,noreferrer');
     } else {
+      overlay.releaseFocus();
       window.open(match.url, '_self');
     }
     return true;
@@ -825,8 +860,18 @@ export function enableDatoVisualEditing(rawOptions: EnableOptions): () => void {
     document.removeEventListener('focusout', onFocusOut, true);
     document.removeEventListener('click', onClick, true);
     document.removeEventListener('keydown', onKeyDown, true);
+    document.removeEventListener('scroll', updateOverlayPosition, true);
     window.removeEventListener('scroll', updateOverlayPosition, true);
     window.removeEventListener('resize', updateOverlayPosition, true);
+    if (layoutObserver) {
+      layoutObserver.disconnect();
+      layoutObserver = null;
+    }
+    if (matchObserver) {
+      matchObserver.disconnect();
+      matchObserver = null;
+    }
+    geometryObserverTarget = null;
     updateMatchFromMove.cancel();
     cancelHoverClear();
   };

@@ -1,320 +1,279 @@
 # datocms-visual-editing
 
-## Quick Setup Guide
+Click-to-edit overlays for content rendered from DatoCMS—**no Vercel toolbar required**.  
+This tiny ESM library decodes stega metadata added by DatoCMS, draws unobtrusive overlays on your page, and deep-links straight to the exact record/field in the DatoCMS editor.
 
-1. **Install the package.**
+> **Requirements**
+>
+> - Node **≥ 18**
+> - Evergreen browsers
+> - Your preview build must fetch content from DatoCMS **with “visual editing” headers** (see below)
+
+---
+
+## Table of contents
+
+- [Quick start (copy-paste)](#quick-start-copy-paste)
+- [Concepts in 60 seconds](#concepts-in-60-seconds)
+- [Step 1: Fetch content with the right headers](#step-1-fetch-content-with-the-right-headers)
+- [Step 2: Turn on overlays in the browser](#step-2-turn-on-overlays-in-the-browser)
+- [Step 3 (recommended): Auto-clean stega characters](#step-3-recommended-auto-clean-stega-characters)
+  - [Why cleanup is needed](#why-cleanup-is-needed)
+  - [How overlays keep working after cleanup](#how-overlays-keep-working-after-cleanup)
+  - [Ways to run AutoClean](#ways-to-run-autoclean)
+- [Images: how visual editing works for `<img>`](#images-how-visual-editing-works-for-img)
+  - [Checklist for images](#checklist-for-images)
+  - [When to use explicit tags (backgrounds, svgs, numbers…)](#when-to-use-explicit-tags-backgrounds-svgs-numbers)
+- [Structured Text (DAST): make the whole block clickable](#structured-text-dast-make-the-whole-block-clickable)
+  - [Using `react-datocms` effectively](#using-react-datocms-effectively)
+  - [Common pitfalls & fixes (Structured Text)](#common-pitfalls--fixes-structured-text)
+  - [FAQ for Structured Text](#faq-for-structured-text)
+- [Verifying your integration](#verifying-your-integration)
+- [Tuning overlays (hit area, hover, accessibility)](#tuning-overlays-hit-area-hover-accessibility)
+- [Deep link behaviour](#deep-link-behaviour)
+- [Recipes (GraphQL clients, Next.js, plain JS)](#recipes-graphql-clients-nextjs-plain-js)
+- [API reference](#api-reference)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
+
+---
+
+## Quick start (copy-paste)
+
+1. **Install**
+
    ```bash
    pnpm add datocms-visual-editing
+   # or: npm i datocms-visual-editing
    ```
 
-2. **Fetch preview content with headers enabled.**
+2. **Fetch preview content with headers**
+
    ```ts
    import { withContentLinkHeaders } from 'datocms-visual-editing';
 
-   const fetchWithHeaders = withContentLinkHeaders(fetch);
-   const data = await fetchWithHeaders('https://graphql.datocms.com/', {
+   const fetchDato = withContentLinkHeaders(fetch, 'https://acme.admin.datocms.com'); // default X-Base-Editing-Url
+
+   const res = await fetchDato('https://graphql.datocms.com/', {
      method: 'POST',
      headers: {
        Authorization: `Bearer ${process.env.DATO_CDA_TOKEN}`,
-       'Content-Type': 'application/json',
-       'X-Base-Editing-Url': 'https://acme.admin.datocms.com'
+       'Content-Type': 'application/json'
      },
      body: JSON.stringify({ query })
    });
    ```
 
-3. **Enable overlays in your preview bundle.**
-  ```ts
-  import { enableDatoVisualEditing } from 'datocms-visual-editing';
-
-  enableDatoVisualEditing({
-    baseEditingUrl: 'https://acme.admin.datocms.com',
-    activate: 'query',       // ?edit=1 turns it on by default
-    overlays: 'hover',
-    // Best practice: keep this true so overlays remain clickable after AutoClean
-    persistAfterClean: true
-  });
-  ```
-
-4. **Run AutoClean after hydration (recommended).**
-
-   **React** (import from the `react` subpath):
-
-   ```tsx
-   'use client'
-   import { DatoAutoClean } from 'datocms-visual-editing/react';
-
-   export function PreviewCard({ title, intro, image }) {
-     return (
-       <DatoAutoClean as="article" className="card" options={{ delayMs: 32 }}>
-         <h1>{title}</h1>
-         <p>{intro}</p>
-         <img src={image.url} alt={image.alt ?? ''} />
-       </DatoAutoClean>
-     );
-   }
-   ```
-
-   **Non-React**:
+3. **Enable overlays in your preview bundle**
 
    ```ts
-   import { enableDatoAutoClean, autoCleanStegaWithin } from 'datocms-visual-editing';
+   import { enableDatoVisualEditing } from 'datocms-visual-editing';
 
-   enableDatoAutoClean();          // Cleans inside every [data-datocms-auto-clean]
-   // or
-   autoCleanStegaWithin(containerElement);
+   enableDatoVisualEditing({
+     baseEditingUrl: 'https://acme.admin.datocms.com',
+     activate: 'query',            // ?edit=1 enables it (see activation options)
+     overlays: 'hover',
+     persistAfterClean: true        // keep this on (default)
+   });
    ```
 
-   AutoClean scrubs the zero-width stega markers shortly after hydration while
-   overlays stay functional thanks to `persistAfterClean: true`.
+4. **(Recommended) Auto-clean stega characters after hydration**
 
-5. **(Optional) Mark up large cards.** Wrap card containers with `data-datocms-edit-target` so the whole card highlights, not just the text node.
+   - **React**
 
-That’s it—hover or click the decoded content in your preview build to jump straight to the matching record inside DatoCMS.
+     ```tsx
+     'use client';
+     import { DatoAutoClean } from 'datocms-visual-editing/react';
 
-Click-to-edit overlays for content rendered from DatoCMS stega metadata—no Vercel toolbar required. Drop the tiny ES module into any preview build, decode the hidden payloads, and jump straight to the right record + field inside the DatoCMS editor.
+     export function PreviewCard({ title, intro, image }) {
+       return (
+         <DatoAutoClean as="article" className="card" options={{ delayMs: 32 }}>
+           <h1>{title}</h1>
+           <p>{intro}</p>
+           <img src={image.url} alt={image.alt ?? ''} />
+         </DatoAutoClean>
+       );
+     }
+     ```
 
-```
-DatoCMS GraphQL → content with hidden markers → overlay → Dato editor deep link
-```
+   - **Non-React**
 
-## How it works
+     ```ts
+     import { enableDatoAutoClean } from 'datocms-visual-editing';
 
-```
-┌──────────────┐      X-Visual-Editing headers      ┌───────────────┐
-│  Your site   │ ─────────────────────────────────▶ │ DatoCMS CDA    │
-└──────┬───────┘                                     └──────┬────────┘
-       │ cleaned text + @vercel/stega markers                │
-       ▼                                                     ▼
-┌──────────────┐   decode + map ids   ┌────────────────────┐  Deep link with
-│ Visual layer │ ───────────────────▶ │ enableDatoVisual…() │ ───────────────▶
-└──────┬───────┘   overlays + badge   └────────────────────┘  #fieldPath hash
-       │
-       ▼
-   DatoCMS editor opens at the exact record + field
-```
+     // Cleans inside every element that has [data-datocms-auto-clean]
+     enableDatoAutoClean();
+     ```
 
-Under the hood we:
+Open your preview page with **`?edit=1`**. Hover/click content to jump straight to DatoCMS.
 
-1. Require the two Dato headers so the Content Delivery API embeds `@vercel/stega` metadata in strings and image alts.
-2. Decode the payload client-side (MPL-2.0 `@vercel/stega` dependency) into `itemId`, `itemTypeId`, `fieldPath`, etc.
-3. Draw unobtrusive overlays above the matching DOM nodes (or custom containers) and wire click/keyboard handlers that deep link to the admin UI with `#fieldPath=`.
+---
 
-## Installation
+## Concepts in 60 seconds
 
-```bash
-pnpm add datocms-visual-editing
-# or
-npm install datocms-visual-editing
-```
+**Stega metadata**: DatoCMS can embed invisible “zero-width” markers into strings (and image `alt`s). These markers carry `{ itemId, itemTypeId, fieldPath, locale, editUrl }` so the library can draw a small overlay over what you see and deep-link to the right field in the editor.
 
-Target Node ≥ 18 / evergreen browsers. The package ships ESM-only output in `dist/` and has no runtime dependencies besides `@vercel/stega`.
+**AutoClean**: Fonts/layout can shift slightly with zero-width characters; frameworks sometimes strip them unpredictably. AutoClean removes the markers from your DOM **after** we decode them so your layout matches production while overlays keep working.
 
-## Getting stega metadata from DatoCMS
+**Images**: DatoCMS encodes metadata in the **`alt`** string of `<img>` elements. Background images don’t carry metadata—you’ll use explicit tags in those cases.
 
-Enable the headers on every GraphQL request that powers your preview surface:
+---
+
+## Step 1: Fetch content with the right headers
+
+You must include:
+
+- `X-Visual-Editing: vercel-v1`
+- `X-Base-Editing-Url: https://<your-project>.admin.datocms.com`
+
+Use the helper to guarantee both and avoid header drift:
 
 ```ts
 import { withContentLinkHeaders } from 'datocms-visual-editing';
 
-const fetchWithHeaders = withContentLinkHeaders(fetch);
-await fetchWithHeaders('https://graphql.datocms.com/', {
+const fetchDato = withContentLinkHeaders(fetch, 'https://acme.admin.datocms.com'); // optional default
+const data = await fetchDato('https://graphql.datocms.com/', {
   method: 'POST',
   headers: {
     Authorization: `Bearer ${process.env.DATO_CDA_TOKEN}`,
-    'Content-Type': 'application/json',
-    'X-Base-Editing-Url': 'https://acme.admin.datocms.com'
+    'Content-Type': 'application/json'
   },
   body: JSON.stringify({ query })
 });
 ```
 
+> Need Node/undici streaming? Pass either `fetch(url, init)` or a pre-built `Request`—the helper forwards `init.duplex` in both cases. If `X-Base-Editing-Url` is missing, the helper throws early so you don’t debug a blank page.
+
 Adapters:
 
-- `graphql-request` client:
-  ```ts
-  import { GraphQLClient } from 'graphql-request';
-  import { withContentLinkHeaders } from 'datocms-visual-editing';
+- **graphql-request**: pass the wrapped `fetch` and the base URL header.
+- **Apollo**: add the two headers via a context link.
 
-  const rawFetch = withContentLinkHeaders(fetch);
+(See [Recipes](#recipes-graphql-clients-nextjs-plain-js) for copy-paste snippets.)
 
-  const client = new GraphQLClient(endpoint, {
-    fetch: rawFetch,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'X-Base-Editing-Url': 'https://acme.admin.datocms.com'
-    }
-  });
-  ```
-- Apollo Link:
-  ```ts
-  import { setContext } from '@apollo/client/link/context';
+---
 
-  const contentLinkHeaders = setContext((_, { headers }) => ({
-    headers: {
-      ...headers,
-      'X-Visual-Editing': 'vercel-v1',
-      'X-Base-Editing-Url': 'https://acme.admin.datocms.com'
-    }
-  }));
-  ```
-
-## Usage in the browser
+## Step 2: Turn on overlays in the browser
 
 ```ts
 import { enableDatoVisualEditing } from 'datocms-visual-editing';
 
 enableDatoVisualEditing({
   baseEditingUrl: 'https://acme.admin.datocms.com',
-  activate: 'query',           // default: ?edit=1 toggles on
-  overlays: 'hover',           // 'always' | 'hover' | 'off'
-  showBadge: true,             // tiny “Open in DatoCMS” badge
-  targetAttribute: 'data-datocms-edit-target',
-  hitPadding: 8,               // forgive near-miss hovers (per side, px)
-  minHitSize: 20,              // optional minimum overlay size
-  hoverLingerMs: 120,          // keeps overlays visible briefly when skimming edges
-  openInNewTab: true
+  activate: 'query',        // ?edit=1 enables; ?edit=0 disables
+  overlays: 'hover',        // 'hover' | 'always' | 'off'
+  showBadge: true,          // small “Open in DatoCMS” badge
+  openInNewTab: true        // opens with noopener,noreferrer for safety
 });
 ```
 
-The initializer returns a disposer if you need to tear everything down (SPA route change, etc.).
+**Activation options**
 
-### Activation strategies
+- `'query'` *(default)* – `?edit=1` → on, `?edit=0|false|off` → off.
+- `'localStorage'` – set `localStorage.setItem('datocms:ve','1')` to enable.
+- `'always'` – always on (useful on preview deployments).
+- function – custom `(window) => boolean`.
 
-| Mode            | Description                                                             |
-|-----------------|-------------------------------------------------------------------------|
-| `always`        | Force-enable (preview deployments).                                     |
-| `query` (default)| Checks `?edit=1` (customizable via `activationQueryParam`).            |
-| `localStorage`  | Reads a toggle key (default `datocms:ve === '1'`).                       |
-| function        | Pass a custom `(window) => boolean` predicate.                          |
+---
 
-### Overlay controls
+## Step 3 (recommended): Auto-clean stega characters
 
-- `targetAttribute`: Place `data-datocms-edit-target` on a container to highlight the entire card while still decoding stega hidden inside a child node. Existing `data-vercel-edit-target` hooks are honoured too.
-- `hitPadding` (default `8`): inflate hover/click geometry so the pointer can drift slightly outside the glyphs or image and still count as “on the card”. Accepts a number or `{ x, y }` / directional object.
-- `minHitSize` (default `0`): guarantee a minimum overlay size (useful for tiny inline strings). Pass a number or `{ width, height }`.
-- `hoverLingerMs` (default `100`): hold the overlay on screen for a short time when the pointer leaves a target to avoid flicker.
-- `mergeSegments` (default `'proximity'`): merge per-line text rectangles. Set to `'always'` for a single box or `'never'` to keep discrete segments.
-- `mergeProximity` (default `6`): distance (in px or `EdgePadding` object) used when `mergeSegments: 'proximity'` to decide whether adjacent boxes should be merged.
-- `showBadge`: toggle the badge. When enabled, it’s clickable + keyboard accessible (`Enter` / `Space`).
-- Respect for `prefers-reduced-motion` disables outline animations automatically.
+### Why cleanup is needed
 
-Clicks (or keyboard activation using `Enter`/`Space`) always open the matching record in DatoCMS. Use `openInNewTab` to choose between a new tab (`true`, default) or the current tab (`false`).
+- The stega markers are **zero-width Unicode codepoints** embedded in strings.
+- They are invisible but can **subtly affect kerning/line breaking** in some fonts.
+- Frameworks may strip or re-serialize text nodes during hydration, occasionally removing the markers in **unpredictable ways**.
+- Running **AutoClean** performs a **controlled, predictable scrub** shortly after hydration—**your layout matches production** while overlays still work.
 
-### Debug mode
+### How overlays keep working after cleanup
 
-Flip on verbose logging during preview/debug sessions:
+- `enableDatoVisualEditing({ persistAfterClean: true })` *(default)* caches each decoded payload.
+- When AutoClean removes the characters, the library **reuses the cached metadata** to keep overlays clickable.
+- **Leave `persistAfterClean` enabled** unless you intentionally want the markers to stay in the DOM.
 
-```ts
-enableDatoVisualEditing({
-  baseEditingUrl: 'https://acme.admin.datocms.com',
-  activate: 'always',
-  debug: true
-});
-```
+### Ways to run AutoClean
 
-Every overlay click outputs a `[datocms-visual-editing][debug] overlay click` entry with the resolved URL, decoded metadata, and the highlighted DOM node. Handy when verifying that your field paths, environments, and custom `onResolveUrl` logic line up with expectations.
+Pick **one** approach:
 
-### Recommended: Persist + AutoClean
+1. **React component** (wraps any element subtree)
 
-Keep `persistAfterClean: true` (the default) when you call `enableDatoVisualEditing()` and pair it with one of the AutoClean helpers. The observer caches each decoded payload so overlays stay interactive even after the hidden stega markers are scrubbed from the DOM. This gives you layout parity with production fonts while retaining click-to-edit previews. Only disable `persistAfterClean` if you intentionally want to keep the markers in the DOM at all times.
+   ```tsx
+   <DatoAutoClean as="article" options={{ delayMs: 32 }}>
+     {/* children with stega text/img alts */}
+   </DatoAutoClean>
+   ```
 
-Frameworks such as Next.js often remove zero-width characters shortly after hydration, so running AutoClean yourself ensures a controlled, predictable scrub instead of relying on framework quirks.
+2. **React hook** (attach to a specific ref)
 
-### Auto-clean stega marks
+   ```tsx
+   'use client';
+   import { useRef } from 'react';
+   import { useDatoAutoClean } from 'datocms-visual-editing/react';
 
-Zero-width stega characters can still nudge kerning or wraps in some fonts. AutoClean removes them shortly after hydration while overlays remain clickable thanks to the persisted decoding cache.
+   const ref = useRef<HTMLSpanElement>(null);
+   useDatoAutoClean(ref, { delayMs: 32, observe: false });
+   ```
 
-**React component**
+3. **Attribute-based** (no framework)
 
-```tsx
-'use client';
-import { DatoAutoClean } from 'datocms-visual-editing/react';
+   ```html
+   <span data-datocms-auto-clean>
+     $9.99 <!-- stega-encoded -->
+   </span>
+   <script type="module">
+     import { enableDatoAutoClean } from 'datocms-visual-editing';
+     enableDatoAutoClean(); // cleans every [data-datocms-auto-clean]
+   </script>
+   ```
 
-export function PriceCard({ title, intro, image }) {
-  return (
-    <DatoAutoClean as="article" className="card" options={{ delayMs: 32 }}>
-      <h1>{title}</h1>
-      <p>{intro}</p>
-      <img src={image.url} alt={image.alt ?? ''} />
-    </DatoAutoClean>
-  );
-}
-```
+4. **Programmatic (per container)**
 
-**React hook**
+   ```ts
+   import { autoCleanStegaWithin } from 'datocms-visual-editing';
 
-```tsx
-'use client';
-import { useRef } from 'react';
-import { useDatoAutoClean } from 'datocms-visual-editing/react';
+   const dispose = autoCleanStegaWithin(containerEl, {
+     delayMs: 32,
+     observe: false,
+     cleanImageAlts: true,
+     // skip areas you actively edit
+     skipSelectors: ['[contenteditable="true"]']
+   });
+   ```
 
-export function Price({ children }: { children: string }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  useDatoAutoClean(ref, { delayMs: 32 });
-  return (
-    <span ref={ref} data-datocms-edit-target data-datocms-auto-clean>
-      {children}
-    </span>
-  );
-}
-```
+**Options**
 
-**Attribute-based**
+- `delayMs` *(default 32ms)*: debounce cleanup after mutations.
+- `observe` *(default false)*: watch for later text/alt changes (useful with live preview).
+- `cleanImageAlts` *(default true)*: also scrub `<img alt>`.
+- `skipSelectors`: don’t touch user-editable areas.
+
+---
+
+## Images: how visual editing works for `<img>`
+
+DatoCMS embeds stega metadata in **`<img alt="...">`** strings. That’s how the library can draw a box over the visual image and open the right record/field.
+
+### Checklist for images
+
+- ✅ **Ensure `alt` is present and non-empty.** No `alt`, no metadata.
+- ✅ If the `<img>` is **lazy or initially `0×0`**, add `data-datocms-edit-target` to a wrapper; overlays will use the wrapper’s geometry.
+- ✅ AutoClean with `cleanImageAlts: true` (default) is safe—the observer caches metadata, so overlays continue to work after alt cleanup.
+- ✅ Hovering the **wrapper** works too; the library resolves descendant image matches.
+
+**Example**
 
 ```html
-<span data-datocms-auto-clean>
-  $9.99<!-- stega-encoded -->
-</span>
+<a class="card" data-datocms-edit-target>
+  <img src="/hero.jpg" alt="<!-- stega-encoded --> Hero image" />
+</a>
 ```
 
-```ts
-import { enableDatoAutoClean } from 'datocms-visual-editing';
+### When to use explicit tags (backgrounds, svgs, numbers…)
 
-enableDatoAutoClean();
-```
-
-**Programmatic (per container)**
-
-```ts
-import { autoCleanStegaWithin } from 'datocms-visual-editing';
-
-const dispose = autoCleanStegaWithin(document.getElementById('price')!, {
-  delayMs: 32,
-  observe: false,
-  cleanImageAlts: true
-});
-```
-
-**Notes**
-
-- Keep `persistAfterClean: true` on `enableDatoVisualEditing(...)` so overlays stay active after the scrub.
-- Pass `observe: true` if the container receives stega text later (e.g. live preview streams); otherwise the cleaner runs once per mount.
-- For typography-critical strings you can skip the initial paint with markers by rendering `stripStega(value)` plus `buildEditTagAttributes(...)` instead of relying on auto-clean.
-
-### Deep link behaviour
-
-- If a stega payload already carries an `editUrl` that matches your `baseEditingUrl` origin, the overlay reuses it verbatim so editor tabs, locales, and `#fieldPath` hashes stay intact.
-- Otherwise we build the URL from `baseEditingUrl`, optional `environment`, `itemTypeId`, and `itemId`, and append the normalized `fieldPath` (when available) as `#fieldPath=`.
-- Trim trailing slashes from `baseEditingUrl` (for example store `https://acme.admin.datocms.com` instead of the version with a trailing `/`) to avoid doubled slashes in the generated deep links.
-
-## Field targeting tips
-
-- DatoCMS exposes `#fieldPath=` anchors in the editor—payloads from stega already include them for structured text spans and modular content. You can override or augment the path by decorating any ancestor with `data-datocms-field-path="blocks.0.title"`.
-- Keep overlay positioning accurate by avoiding large `letter-spacing` tweaks in preview modes. If you must, call `stripStega()` on the string before measuring text widths.
-
-## Non-text fields and complex text fields
-
-DatoCMS only appends visual-editing metadata to:
-
-- **Plain text fields** (single-line or multi-line without special validation).
-- **Structured Text** nodes (metadata rides on the final text span of the first block rendered).
-- **Image `alt` strings** returned with each upload.
-
-Numbers, booleans, slugs, coordinates, JSON blobs, counters, icons, SVGs, background images, etc., do **not** carry stega markers automatically. Use explicit edit tags to opt those elements into overlays:
+Many things **don’t** carry stega automatically (background images, inline SVGs, numbers, slugs, booleans, JSON, icons). Opt them into visual editing with **explicit attributes**:
 
 ```html
-<!-- Minimal JSON tag -->
+<!-- Minimal JSON payload -->
 <span
   data-datocms-edit-info='{
     "itemId": "123",
@@ -327,148 +286,403 @@ Numbers, booleans, slugs, coordinates, JSON blobs, counters, icons, SVGs, backgr
   129.00
 </span>
 
-<!-- Minimal JSON tag when you already have _editingUrl -->
-<span
+<!-- If your query returned _editingUrl, you can skip itemId/itemTypeId -->
+<div
   data-datocms-edit-info='{
-    "editUrl": "https://acme.admin.datocms.com/editor/item_types/123456/items/789/edit#fieldPath=gallery.0.alt",
+    "editUrl": "https://acme.admin.datocms.com/editor/items/789/edit#fieldPath=gallery.0.alt",
     "locale": "en"
   }'
   data-datocms-edit-target
 >
-  <img src="/gallery.jpg" alt="Gallery item" />
-</span>
-
-<!-- Split attributes (no inline JSON) -->
-<div
-  data-datocms-item-id="123"
-  data-datocms-item-type-id="123456"
-  data-datocms-field-path="seo.title"
-  data-datocms-locale="en"
-  data-datocms-edit-target
->
-  <svg aria-hidden="true" class="icon icon--edit"></svg>
+  <svg aria-hidden="true" className="icon"></svg>
 </div>
 ```
 
-Always include the locale—either in the JSON payload or via the `data-datocms-locale` attribute—so overlays can open the correct localized field in the editor. Keep `fieldPath` segments snake_case to match the editor anchors (`sale_price.en`, not `salePrice.en`).
-
-In React/JS you can generate the attributes with `buildEditTagAttributes`:
+Or generate the attributes in JS/React:
 
 ```tsx
 import { buildEditTagAttributes } from 'datocms-visual-editing';
 
-export function Price({ itemId, amount }: { itemId: string; amount: number }) {
-  const attrs = buildEditTagAttributes({
-    itemId,
-    itemTypeId: '123456',
-    fieldPath: 'price',
-    locale: 'en'
-  });
+const attrs = buildEditTagAttributes({
+  itemId: '123',
+  itemTypeId: '123456',     // model numeric ID
+  fieldPath: 'seo.title',
+  locale: 'en'
+});
+
+return <span {...attrs} data-datocms-edit-target>Title</span>;
+```
+
+> Always include a **`locale`** when using explicit tags so the editor opens the localized field.
+
+---
+
+## Structured Text (DAST): make the whole block clickable
+
+### How stega is injected into Structured Text
+
+For **Structured Text fields**, DatoCMS appends the stega metadata **only once**:
+
+> the metadata is added to the **end of the last `span`** inside the **first** block-level node found (paragraph, heading, list, code, or blockquote).
+
+Implication: by default, only that *specific text node* carries the editing payload. If you rely on that alone, the hover target may feel tiny (e.g., only the tail of the first paragraph highlights).
+
+### Goal: a single overlay for the entire `<StructuredText>` output
+
+Use the **“info + target”** pattern:
+
+- Let the library **discover the info** (from the embedded stega in that first block), **or** provide it explicitly.
+- Tell the library **which element’s geometry** to use for the hit area via `data-datocms-edit-target`.
+
+#### Option A — Preferred (no extra data needed)
+
+Wrap your `<StructuredText>` with a container marked as the **target**. The library will decode the stega inside, but draw/merge the overlay using the wrapper’s rectangle.
+
+```tsx
+import { StructuredText } from 'react-datocms';
+import { DatoAutoClean } from 'datocms-visual-editing/react';
+
+export function ArticleBody({ body }) {
   return (
-    <span {...attrs} data-datocms-edit-target>
-      {amount.toFixed(2)}
-    </span>
+    <DatoAutoClean as="section" className="prose" options={{ delayMs: 32 }}>
+      {/* Use the wrapper geometry for overlays */}
+      <div data-datocms-edit-target>
+        <StructuredText data={body} />
+      </div>
+    </DatoAutoClean>
   );
 }
 ```
 
-The `itemTypeId` value must be the model's internal numeric ID from DatoCMS (for example `123456`), not the API identifier such as `product`.
+This gives you a **single, generous hover area** over the entire block while still deep-linking to the correct **record/field** from the inner stega payload.
 
-If your GraphQL query includes the `_editingUrl` field you can pass it directly:
+#### Option B — Bulletproof (works even when the field is empty)
 
-```tsx
-const attrs = buildEditTagAttributes({
-  _editingUrl: data.product._editingUrl,
-  fieldPath: ['seo', 'title'],
-  locale: "en"
-});
-```
-
-When `_editingUrl` is provided the helper appends the normalized `fieldPath` to the URL and can omit both `itemId` and `itemTypeId`.
+Also stamp **explicit info** on the wrapper so the overlay exists even if the field renders no text (e.g., empty body, or first block is a code/list with edge cases).
 
 ```tsx
-const attrs = buildEditTagAttributes({ fieldPath: 'sale_price', locale: 'en' });
-// payload.fieldPath === 'sale_price.en'
+import { StructuredText } from 'react-datocms';
+import { DatoAutoClean } from 'datocms-visual-editing/react';
+import { buildEditTagAttributes } from 'datocms-visual-editing';
+
+export function ArticleBody({ itemId, locale, body }) {
+  const attrs = buildEditTagAttributes({
+    itemId,            // the record ID (string)
+    fieldPath: 'body', // the API key path of your Structured Text field
+    locale             // important if the field is localized
+    // itemTypeId optional; if omitted we use the generic /editor/items/<id> route
+  });
+
+  return (
+    <DatoAutoClean as="section" options={{ delayMs: 32 }}>
+      <div {...attrs} data-datocms-edit-target>
+        <StructuredText data={body} />
+      </div>
+    </DatoAutoClean>
+  );
+}
 ```
 
-`fieldPath` accepts dot strings (`'promo.title'`), individual numbers (`0`), or arrays of those segments (e.g. `['blocks', 0, 'title']`). Other shapes are ignored to avoid ambiguous ordering in the resulting hash.
+> **Tip:** Keep `enableDatoVisualEditing({ persistAfterClean: true })` (default). We decode and cache the payload **before** AutoClean strips the invisible characters, so overlays keep working with a clean DOM.
 
-**Always supply a `locale`.** The overlays rely on it to route clicks to the correct localized value; the helper appends it to the resolved field path (without duplicating it) and rewrites any existing `editUrl` hash so the editor opens the localized field.
+---
 
-`data-datocms-field-path` (if present) overrides any `fieldPath` provided via JSON or split attributes.
-When you call `buildEditTagAttributes(info, 'attrs')`, set `data-datocms-field-path` separately if you need a specific tab/anchor in the editor.
+### Using `react-datocms` effectively
 
-### Images not showing overlays?
+`react-datocms` is great for both rich text and images, but there are a few details to get right.
 
-1. **Ensure the `<img>` has a non-empty `alt`.** The CDA only appends stega markers to strings; if the alt is empty (or replaced), there’s nothing to decode.
-2. **Hydration cleanup.** Frameworks sometimes strip markers right after hydration. The observer keeps matches alive when `persistAfterClean` is `true` (default) as long as the visible `alt` text stays the same.
-3. **Lazy/zero-sized images.** When the image itself measures `0×0`, tag the wrapper with `data-datocms-edit-target`; geometry falls back to the container.
-4. **Background or decorative imagery.** Use explicit tags, e.g.:
+#### 1) Structured Text with embedded blocks/links
 
-```html
-<figure
-  style="background-image:url(/hero.jpg)"
-  data-datocms-edit-info='{"itemId":"asset_987","fieldPath":"hero.alt"}'
-  data-datocms-edit-target
-></figure>
+If your Structured Text contains **block records**, **inline records**, or **links to records**, you can expose generous targets for those too:
+
+```tsx
+<StructuredText
+  data={body}
+  renderBlock={({ record }) => {
+    if (record.__typename === 'ImageBlockRecord') {
+      // Edit the whole block record (not just the inner <img>)
+      return (
+        <figure
+          {...buildEditTagAttributes({
+            itemId: record.id,
+            fieldPath: 'image',
+            locale
+          })}
+          data-datocms-edit-target
+        >
+          <Image data={record.image.responsiveImage} />
+          {record.caption && <figcaption>{record.caption}</figcaption>}
+        </figure>
+      );
+    }
+    return null;
+  }}
+  renderInlineRecord={({ record }) => (
+    <span
+      {...buildEditTagAttributes({
+        itemId: record.id,
+        fieldPath: 'title',
+        locale
+      })}
+      data-datocms-edit-target
+      className="inline-record"
+    >
+      {record.title}
+    </span>
+  )}
+  renderLinkToRecord={({ record, children }) => (
+    <a
+      {...buildEditTagAttributes({
+        itemId: record.id,
+        fieldPath: 'slug',
+        locale
+      })}
+      data-datocms-edit-target
+      href={`/posts/${record.slug}`}
+    >
+      {children}
+    </a>
+  )}
+/>
 ```
 
-## API surface
+> The overlay system chooses the **most specific** target under the pointer. That means block/inline targets remain independently clickable even if the whole `<StructuredText>` wrapper is also a target.
 
-| Export | Description |
-|--------|-------------|
-| `enableDatoVisualEditing(opts)` | Mounts the visual layer and returns a disposer. |
-| `withContentLinkHeaders(fetch?)` | Wraps `fetch` to inject `X-Visual-Editing` + verify `X-Base-Editing-Url`. |
-| `decodeStega(text)` | Returns normalized `DecodedInfo` (`itemId`, `itemTypeId`, `fieldPath`, etc.) or `null`. |
-| `stripStega(text)` | Removes hidden characters so you can measure text without re-rendering. |
-| `buildEditTagAttributes(info, format?)` | Returns the `data-datocms-*` attrs needed to opt-in overlays for non-text elements. |
-| `applyEditTagAttributes(element, info, format?)` | Imperatively stamp the same attributes onto a DOM node. |
-| `buildDatoDeepLink(info, baseEditingUrl, environment?)` | Produces the editor URL (with locale-aware `#fieldPath`) for badges and custom tooling. |
-| `useDatoAutoClean(ref, options?)` *(import from `datocms-visual-editing/react`)* | React hook that runs `autoCleanStegaWithin` on a ref’d element. |
-| `<DatoAutoClean {...} />` *(import from `datocms-visual-editing/react`)* | React component wrapper that auto-cleans its subtree and sets the discovery attribute. |
+#### 2) Images rendered via `react-datocms`’s `<Image>`
 
-Always provide a `locale` to `buildEditTagAttributes` and `buildDatoDeepLink`; both helpers append the locale segment to the resolved `fieldPath` and ensure the `#fieldPath` hash in the edit URL points at the localized value.
+- Keep the **`alt` returned by DatoCMS** in preview; that’s where the **image stega** lives. If you force `alt=""` in preview, we can’t decode the image’s payload.
+- If the image starts **0×0** (lazy, responsive), wrap it and mark the wrapper as the **target**:
 
-### `onResolveUrl` hook
+  ```tsx
+  import { Image } from 'react-datocms';
 
-You can intercept every decoded payload and swap the destination URL:
+  <figure data-datocms-edit-target>
+    <Image data={record.coverImage.responsiveImage} />
+  </figure>
+  ```
+
+- AutoClean with `cleanImageAlts: true` is safe—metadata is cached before we scrub.
+
+---
+
+### Common pitfalls & fixes (Structured Text)
+
+- **Only the end of the first block highlights**  
+  Add a wrapper with `data-datocms-edit-target` (Option A), or also add explicit info (Option B).
+
+- **The body is empty; no overlay appears**  
+  Use **Option B** (explicit info on the wrapper). Example:
+
+  ```tsx
+  <section
+    {...buildEditTagAttributes({ itemId: post.id, fieldPath: 'body', locale })}
+    data-datocms-edit-target
+  >
+    <StructuredText data={post.body} />
+  </section>
+  ```
+
+- **First node is a `code`/`list`/`blockquote` and the hit area is tiny or awkward**  
+  Same fix: mark the wrapper as the target (and optionally provide explicit info).
+
+- **Click conflicts with real links inside the content**  
+  Overlays are active only when editing is enabled (`?edit=1`, `localStorage`, or `always`). If needed, use:
+
+  ```ts
+  enableDatoVisualEditing({
+    onBeforeOpen(url, ev, info) {
+      // return false to keep your app link behavior
+    }
+  });
+  ```
+
+- **You’re rendering “decorative” images inside Structured Text**  
+  If you set `alt=""`, the image won’t carry stega. Put **explicit info** on a wrapper around the image block so it still gets an overlay.
+
+- **Live preview updates change the content after mount**  
+  Run AutoClean with `observe: true` on the container that hosts `<StructuredText>`:
+
+  ```tsx
+  <DatoAutoClean as="section" options={{ delayMs: 32, observe: true }}>
+    <div data-datocms-edit-target>
+      <StructuredText data={body} />
+    </div>
+  </DatoAutoClean>
+  ```
+
+- **CSS clipping / transforms hide the overlay**  
+  The overlay draws in a portal at the document level. If your wrapper has unusual CSS (`overflow: hidden` + heavy transforms), give it some breathing room or put the `data-datocms-edit-target` on a stable ancestor.
+
+---
+
+### FAQ for Structured Text
+
+- **Do I need to fetch anything special for Structured Text?**  
+  No extra fields are required beyond your Structured Text field itself. Just ensure your GraphQL requests include the **visual-editing headers** (use `withContentLinkHeaders`).
+
+- **Will AutoClean remove the stega and break overlays?**  
+  No. Keep `persistAfterClean: true` (default). We decode and cache before cleaning.
+
+- **What if I can’t easily wrap `<StructuredText>`?**  
+  Use `applyEditTagAttributes(el, info)` imperatively after render, or set a `ref` and call `autoCleanStegaWithin(ref.current)` and add `data-datocms-edit-target` to a suitable ancestor.
+
+---
+
+## Verifying your integration
+
+1. **Enable overlays**: add `?edit=1` to your preview URL.
+2. **Hover** over text and images: you should see subtle highlight boxes and an optional badge.
+3. **Click**: DatoCMS editor opens to the exact record + field.
+4. **Debug logging** (optional):
+
+   ```ts
+   enableDatoVisualEditing({ baseEditingUrl, activate: 'always', debug: true });
+   ```
+
+   Every click logs `{ url, info, element }` to the console for easy inspection.
+
+---
+
+## Tuning overlays (hit area, hover, accessibility)
 
 ```ts
 enableDatoVisualEditing({
-  baseEditingUrl: 'https://acme.admin.datocms.com',
-  activate: 'always',
+  baseEditingUrl,
+  overlays: 'hover',
+  showBadge: true,
+  badgeLabel: 'Apri in DatoCMS', // i18n for text + aria-label
+  targetAttribute: 'data-datocms-edit-target', // or 'data-vercel-edit-target'
+  hitPadding: 8,                // forgive near-miss hovers (px or { x,y,top,right,bottom,left })
+  minHitSize: { width: 44, height: 32 }, // ensure accessible targets for tiny strings
+  hoverLingerMs: 120,           // avoids flicker when skimming edges
+  mergeSegments: 'proximity',   // 'proximity' | 'always' | 'never'
+  mergeProximity: 6,            // how close lines must be to merge
+  openInNewTab: true,           // _blank with noopener,noreferrer
+  onBeforeOpen(url, event, info) {
+    // return false to cancel navigation for this click
+  },
   onResolveUrl(info) {
-    if (info.fieldPath?.startsWith('seo.')) {
-      return `${info.editUrl ?? 'https://acme.admin.datocms.com/editor/items/' + info.itemId + '/edit'}#tab=seo`;
-    }
-    return null; // skip overlay if you can’t build a safe URL
+    // return a custom editor URL string or null to skip overlay
+    return null;
   }
 });
 ```
 
-Return `null` to disable overlays for that payload.
+**Accessibility**: overlays use an `aria-live` root, hide decorative segments with `aria-hidden`, and the badge is keyboard-accessible (`Enter`/`Space`). When reusing the current tab, focus is released before navigation to avoid a stuck focus ring.
 
-## Examples
+---
 
-- `examples/plain-js/index.html`: minimal script tag that fetches GraphQL with the headers, renders structured text, and activates overlays when `?edit=1` is present.
-- `examples/nextjs-app-router/`: Next.js 14 App Router demo showing how to restrict `enableDatoVisualEditing` to preview mode and wrap cards with `data-datocms-edit-target` for larger hitboxes.
+## Deep link behaviour
+
+- If the payload has `editUrl` **on the same origin** as your `baseEditingUrl`, the library reuses it verbatim. If you also provide `locale`, the library **merges** it into the `#fieldPath` hash if missing.
+- Otherwise it builds a URL like:
+
+  ```
+  https://<base>/[environments/<env>]/editor/item_types/<itemTypeId>/items/<itemId>/edit#fieldPath=<path[.locale]>
+  ```
+
+- If `itemTypeId` is missing, it uses the simpler `/editor/items/<itemId>/edit` route.
+- Pass `environment` globally or per payload to target non-main environments.
+
+---
+
+## Recipes (GraphQL clients, Next.js, plain JS)
+
+**graphql-request**
+
+```ts
+import { GraphQLClient } from 'graphql-request';
+import { withContentLinkHeaders } from 'datocms-visual-editing';
+
+const rawFetch = withContentLinkHeaders(fetch, 'https://acme.admin.datocms.com');
+
+const client = new GraphQLClient('https://graphql.datocms.com/', {
+  fetch: rawFetch,
+  headers: { Authorization: `Bearer ${token}` }
+});
+```
+
+**Apollo**
+
+```ts
+import { setContext } from '@apollo/client/link/context';
+const contentLinkHeaders = setContext((_, { headers }) => ({
+  headers: {
+    ...headers,
+    'X-Visual-Editing': 'vercel-v1',
+    'X-Base-Editing-Url': 'https://acme.admin.datocms.com'
+  }
+}));
+```
+
+**Plain JS page (no build tooling)**  
+See `examples/plain-js/index.html` in this repo for a minimal script-tag demo.
+
+**Next.js App Router demo**  
+See `examples/nextjs-app-router/`.
+
+---
+
+## API reference
+
+**Browser**
+
+- `enableDatoVisualEditing(opts): () => void`  
+  Mount overlays; returns a disposer (tear down on SPA route changes).
+
+- `enableDatoAutoClean(selector?, opts?): () => void`  
+  Cleans inside every element matching `selector` (defaults to `[data-datocms-auto-clean]`).
+
+- `autoCleanStegaWithin(element, opts): () => void`  
+  Programmatic cleaner for a specific container.
+
+- `buildDatoDeepLink(info, baseEditingUrl, environment?): string`  
+  Build the editor URL yourself (reused internally).
+
+- `buildEditTagAttributes(info, format?): Record<string,string>`  
+  Generate `data-datocms-*` attributes for explicit tagging. `format`: `'json'` *(default)* or `'attrs'`.
+
+- `applyEditTagAttributes(el, info, format?)`  
+  Imperatively stamp those attributes on a DOM element.
+
+**React (subpath import `datocms-visual-editing/react`)**
+
+- `useDatoAutoClean(ref, options?)`
+- `<DatoAutoClean as="span" options={...}>…</DatoAutoClean>`
+
+**Utility**
+
+- `withContentLinkHeaders(fetch?, defaultBaseEditingUrl?)`  
+  Ensures required headers and preserves Request body/duplex.
+- `decodeStega(text): DecodedInfo | null`
+- `stripStega(text): string`
+
+---
 
 ## Troubleshooting
 
-- **No overlays showing** – Double check the headers, ensure `baseEditingUrl` matches your project (and environment), and verify the activation toggle.
-- **Badge/outline misaligned** – Overlay dimensions come from the nearest container with `data-datocms-edit-target`; add the attribute around a stable wrapper or strip stega characters before custom measurements.
-- **Navigation blocked** – Use `onBeforeOpen((url, event) => boolean)` to permit or cancel the editor jump on a per-click basis.
+- **No overlays appearing**  
+  Missing headers? Use `withContentLinkHeaders` and confirm `X-Base-Editing-Url`. Not activated? Add `?edit=1` or set `activate: 'always'`. Wrong project URL? `baseEditingUrl` must match your DatoCMS project (and environment).
 
-## Contributing & testing
+- **Badge/outline misaligned**  
+  Wrap the card with `data-datocms-edit-target` so geometry uses the stable container. Consider `minHitSize` for tiny inline strings.
 
-```bash
-pnpm install
-pnpm build
-pnpm test
-```
+- **Images not showing overlays**  
+  `alt` must be non-empty. If the `<img>` is zero-sized, tag the wrapper: `data-datocms-edit-target`. Background images / SVGs / icons: add **explicit tags** (see section above).
 
-Vitest + jsdom cover decoding, deep-link building, and DOM behaviors.
+- **Structured Text overlay only covers a tiny span**  
+  Wrap the output with `data-datocms-edit-target` (and optionally add explicit info) so the whole block is clickable.
 
-## Licensing
+- **Navigation blocked or needs customization**  
+  Use `onBeforeOpen` to allow/deny per click. Use `onResolveUrl` to redirect certain fields to custom tabs in the editor.
 
-The project itself is MIT licensed (see `LICENSE`). It bundles `@vercel/stega` under MPL-2.0—details live in `LICENSES.md`.
+- **Layout shifts or weird wrapping**  
+  Add AutoClean. Keep `persistAfterClean: true`.
+
+---
+
+## License
+
+- Project: **MIT** (see `LICENSE`)
+- Bundled dependency: `@vercel/stega` — **MPL-2.0** (see `LICENSES.md`)
+

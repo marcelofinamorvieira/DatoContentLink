@@ -45,26 +45,33 @@ function extractFromUrl(url: string) {
   } as const;
 }
 
-export function stripStega(input: string): string {
+export function stripStega(
+  input: string,
+  split?: ReturnType<typeof vercelStegaSplit>
+): string {
   if (!input) {
     return '';
   }
-  return vercelStegaSplit(input).cleaned;
+  const resolvedSplit = split ?? vercelStegaSplit(input);
+  return resolvedSplit.cleaned;
 }
 
-export function decodeStega(input: string): DecodedInfo | null {
+export function decodeStega(
+  input: string,
+  split?: ReturnType<typeof vercelStegaSplit>
+): DecodedInfo | null {
   if (!input) {
     return null;
   }
 
-  const split = vercelStegaSplit(input);
-  if (!split.encoded) {
+  const resolvedSplit = split ?? vercelStegaSplit(input);
+  if (!resolvedSplit.encoded) {
     return null;
   }
 
   let raw: unknown;
   try {
-    raw = vercelStegaDecode(split.encoded);
+    raw = vercelStegaDecode(resolvedSplit.encoded);
   } catch (error) {
     return null;
   }

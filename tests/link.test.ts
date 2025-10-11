@@ -81,6 +81,11 @@ describe('buildDatoDeepLink', () => {
       'https://acme.admin.datocms.com/editor/items/123/edit#fieldPath=seo.description.fr'
     );
   });
+
+  it('throws when editUrl is different origin and itemId is missing', () => {
+    const info = baseInfo({ itemId: '', editUrl: 'https://other.example.com/editor/items/abc' });
+    expect(() => buildDatoDeepLink(info, BASE)).toThrow('Cannot build deep link without itemId or editUrl');
+  });
 });
 
 describe('normalizeFieldPath', () => {

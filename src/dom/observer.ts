@@ -1,5 +1,6 @@
-import { decodeStega, stripStega } from '../decode/stega.js';
+import { decodeStega } from '../decode/stega.js';
 import { DecodedInfo } from '../decode/types.js';
+import { splitStegaCached } from '../decode/splitCache.js';
 import { readExplicitInfo, FIELD_PATH_ATTR, EXPLICIT_ATTRIBUTE_NAMES } from '../utils/attr.js';
 
 type CacheEntry = {
@@ -250,9 +251,10 @@ export class StegaObserver {
 
     const previousEntry = this.textCache.get(node);
 
-    const decoded = decodeStega(value);
+    const split = splitStegaCached(value);
+    const decoded = split.encoded ? decodeStega(value, split) : null;
     if (decoded) {
-      const cleaned = stripStega(value);
+      const cleaned = split.cleaned;
       const signature = `text:encoded:${value}`;
       if (this.textSignatures.get(node) === signature) {
         return;
@@ -295,9 +297,10 @@ export class StegaObserver {
 
     const previousEntry = this.imageCache.get(element);
 
-    const decoded = decodeStega(alt);
+    const split = splitStegaCached(alt);
+    const decoded = split.encoded ? decodeStega(alt, split) : null;
     if (decoded) {
-      const cleaned = stripStega(alt);
+      const cleaned = split.cleaned;
       const signature = `alt:encoded:${alt}`;
       if (this.imageSignatures.get(element) === signature) {
         return;

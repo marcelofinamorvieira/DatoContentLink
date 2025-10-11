@@ -10,10 +10,11 @@ type OverlayCallbacks = {
 type OverlayOptions = {
   mode: OverlayMode;
   showBadge: boolean;
+  badgeLabel?: string;
   callbacks: OverlayCallbacks;
 };
 
-const BADGE_LABEL = 'Open in DatoCMS';
+const DEFAULT_BADGE_LABEL = 'Open in DatoCMS';
 
 function prefersReducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -22,9 +23,11 @@ function prefersReducedMotion(): boolean {
 export class OverlayManager {
   private readonly mode: OverlayMode;
   private readonly showBadge: boolean;
+  private readonly badgeLabel: string;
   private readonly callbacks: OverlayCallbacks;
   private root: HTMLDivElement | null = null;
   private segmentsRoot: HTMLDivElement | null = null;
+  private badge: HTMLButtonElement | null = null;
   private segments: HTMLDivElement[] = [];
   private isVisible = false;
   private lastSignature: string | null = null;
@@ -33,6 +36,7 @@ export class OverlayManager {
   constructor(options: OverlayOptions) {
     this.mode = options.mode;
     this.showBadge = options.showBadge;
+    this.badgeLabel = options.badgeLabel ?? DEFAULT_BADGE_LABEL;
     this.callbacks = options.callbacks;
   }
 
@@ -48,19 +52,24 @@ export class OverlayManager {
     root.style.zIndex = '2147483646';
     root.style.pointerEvents = 'none';
     root.style.display = 'none';
+    root.setAttribute('aria-live', 'polite');
+    root.setAttribute('role', 'region');
+    root.setAttribute('aria-label', 'DatoCMS visual editing overlays');
+    root.tabIndex = -1;
 
     const segmentsRoot = document.createElement('div');
     segmentsRoot.style.position = 'absolute';
     segmentsRoot.style.top = '0';
     segmentsRoot.style.left = '0';
     segmentsRoot.style.pointerEvents = 'none';
+    segmentsRoot.setAttribute('aria-hidden', 'true');
     root.appendChild(segmentsRoot);
 
     if (this.showBadge) {
       const badge = document.createElement('button');
       badge.type = 'button';
-      badge.textContent = BADGE_LABEL;
-      badge.setAttribute('aria-label', BADGE_LABEL);
+      badge.textContent = this.badgeLabel;
+      badge.setAttribute('aria-label', this.badgeLabel);
       badge.style.position = 'absolute';
       badge.style.top = '0';
       badge.style.right = '0';
@@ -90,6 +99,7 @@ export class OverlayManager {
       });
 
       root.appendChild(badge);
+      this.badge = badge;
     }
 
     document.body.appendChild(root);
@@ -153,6 +163,7 @@ export class OverlayManager {
     }
     this.root = null;
     this.segmentsRoot = null;
+    this.badge = null;
     this.segments = [];
     this.isVisible = false;
     this.lastSignature = null;
@@ -165,6 +176,7 @@ export class OverlayManager {
     while (this.segments.length < count) {
       const segment = document.createElement('div');
       segment.setAttribute('role', 'presentation');
+      segment.setAttribute('aria-hidden', 'true');
       segment.style.position = 'absolute';
       segment.style.borderRadius = '8px';
       segment.style.border = '2px solid #ff7751';
@@ -221,6 +233,19 @@ export class OverlayManager {
       } else {
         segment.style.display = 'none';
       }
+    }
+  }
+
+  releaseFocus(): void {
+    if (this.badge && document.activeElement === this.badge) {
+      this.badge.blur();
+    }
+    if (
+      this.root &&
+      document.activeElement instanceof HTMLElement &&
+      this.root.contains(document.activeElement)
+    ) {
+      document.activeElement.blur();
     }
   }
 }

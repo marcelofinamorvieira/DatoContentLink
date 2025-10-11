@@ -103,6 +103,8 @@ beforeEach(() => {
 
 afterEach(() => {
   document.body.innerHTML = '';
+  window.localStorage.clear();
+  window.history.replaceState({}, '', '/');
   if (originalElementsFromPoint) {
     Object.defineProperty(document, 'elementsFromPoint', {
       configurable: true,
@@ -117,6 +119,80 @@ afterEach(() => {
 });
 
 describe('enableDatoVisualEditing', () => {
+  it('activates when the query toggle is present and truthy', async () => {
+    const payload = {
+      cms: 'datocms',
+      itemId: 'query123',
+      itemTypeId: 'article',
+      fieldPath: 'title'
+    };
+    const encoded = vercelStegaCombine('Query headline', payload);
+
+    window.history.replaceState({}, '', '/blog?edit=1');
+
+    document.body.innerHTML = `<h1 id="headline">${encoded}</h1>`;
+    const headline = document.getElementById('headline')!;
+    headline.getBoundingClientRect = () => createRect(20, 30, 120, 28);
+    textRectMap.set(headline.firstChild as Text, [createRect(20, 30, 120, 28)]);
+
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    const dispose = enableDatoVisualEditing({
+      baseEditingUrl: 'https://acme.admin.datocms.com',
+      overlays: 'hover',
+      showBadge: false,
+      openInNewTab: true,
+      hoverLingerMs: 0
+    });
+
+    headline.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 40, clientY: 44, pointerType: 'mouse' }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    headline.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 40, clientY: 44 }));
+
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://acme.admin.datocms.com/editor/item_types/article/items/query123/edit#fieldPath=title',
+      '_blank',
+      expect.stringContaining('noopener')
+    );
+
+    dispose();
+  });
+
+  it.each(['0', 'false', 'off'])('skips activation when the query toggle is %s', async (value) => {
+    const payload = {
+      cms: 'datocms',
+      itemId: 'queryDisabled',
+      itemTypeId: 'article',
+      fieldPath: 'title'
+    };
+    const encoded = vercelStegaCombine('Disabled headline', payload);
+
+    window.history.replaceState({}, '', `/blog?edit=${value}`);
+
+    document.body.innerHTML = `<h1 id="headline">${encoded}</h1>`;
+    const headline = document.getElementById('headline')!;
+    headline.getBoundingClientRect = () => createRect(10, 10, 120, 30);
+    textRectMap.set(headline.firstChild as Text, [createRect(10, 10, 120, 30)]);
+
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    const dispose = enableDatoVisualEditing({
+      baseEditingUrl: 'https://acme.admin.datocms.com',
+      overlays: 'hover',
+      showBadge: false,
+      openInNewTab: true,
+      hoverLingerMs: 0
+    });
+
+    headline.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 30, clientY: 24, pointerType: 'mouse' }));
+    headline.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 30, clientY: 24 }));
+
+    expect(openSpy).not.toHaveBeenCalled();
+    expect(document.querySelector('[aria-live="polite"]')).toBeNull();
+
+    dispose();
+  });
+
   it('highlights container targets and opens deep links on click', async () => {
     const payload = {
       cms: 'datocms',
@@ -173,6 +249,82 @@ describe('enableDatoVisualEditing', () => {
     dispose();
   });
 
+  it('activates when the localStorage toggle is enabled', async () => {
+    const payload = {
+      cms: 'datocms',
+      itemId: '789',
+      itemTypeId: 'article',
+      fieldPath: 'title'
+    };
+    const encoded = vercelStegaCombine('Local headline', payload);
+
+    document.body.innerHTML = `<h1 id="headline">${encoded}</h1>`;
+    const headline = document.getElementById('headline')!;
+    headline.getBoundingClientRect = () => createRect(20, 30, 160, 40);
+    textRectMap.set(headline.firstChild as Text, [createRect(20, 30, 160, 40)]);
+
+    window.localStorage.setItem('datocms:ve', '1');
+
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    const dispose = enableDatoVisualEditing({
+      baseEditingUrl: 'https://acme.admin.datocms.com',
+      activate: 'localStorage',
+      overlays: 'hover',
+      showBadge: false,
+      openInNewTab: true,
+      hoverLingerMs: 0
+    });
+
+    headline.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 40, clientY: 40 }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    headline.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 }));
+
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://acme.admin.datocms.com/editor/item_types/article/items/789/edit#fieldPath=title',
+      '_blank',
+      expect.stringContaining('noopener')
+    );
+
+    dispose();
+  });
+
+  it('skips activation when the localStorage toggle is disabled', async () => {
+    const payload = {
+      cms: 'datocms',
+      itemId: '1011',
+      itemTypeId: 'article',
+      fieldPath: 'title'
+    };
+    const encoded = vercelStegaCombine('Disabled headline', payload);
+
+    document.body.innerHTML = `<h2 id="headline">${encoded}</h2>`;
+    const headline = document.getElementById('headline')!;
+    headline.getBoundingClientRect = () => createRect(20, 30, 160, 40);
+    textRectMap.set(headline.firstChild as Text, [createRect(20, 30, 160, 40)]);
+
+    window.localStorage.setItem('datocms:ve', '0');
+
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    const dispose = enableDatoVisualEditing({
+      baseEditingUrl: 'https://acme.admin.datocms.com',
+      activate: 'localStorage',
+      overlays: 'hover',
+      showBadge: false,
+      openInNewTab: true,
+      hoverLingerMs: 0
+    });
+
+    headline.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 40, clientY: 40 }));
+    headline.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 40, clientY: 40 }));
+
+    expect(openSpy).not.toHaveBeenCalled();
+    expect(document.body.lastElementChild).toBe(headline);
+
+    dispose();
+  });
+
   it('uses prebuilt editUrl when provided', async () => {
     const editUrl = 'https://acme.admin.datocms.com/editor/item_types/article/items/123/edit#fieldPath=subtitle';
     const payload = {
@@ -201,7 +353,209 @@ describe('enableDatoVisualEditing', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     subhead.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 }));
 
-    expect(openSpy).toHaveBeenCalledWith(editUrl, '_blank', 'noopener');
+    expect(openSpy).toHaveBeenCalledWith(editUrl, '_blank', expect.stringContaining('noopener'));
+
+    dispose();
+  });
+
+  it('honours onBeforeOpen returning false without preventing the original event', async () => {
+    const payload = {
+      cms: 'datocms',
+      itemId: 'onbefore',
+      itemTypeId: 'article',
+      fieldPath: 'title'
+    };
+    const encoded = vercelStegaCombine('Before open', payload);
+
+    document.body.innerHTML = `<p id="content">${encoded}</p>`;
+    const content = document.getElementById('content')!;
+    content.getBoundingClientRect = () => createRect(10, 10, 120, 28);
+    textRectMap.set(content.firstChild as Text, [createRect(10, 10, 120, 28)]);
+
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const onBeforeOpen = vi.fn(() => false);
+
+    const dispose = enableDatoVisualEditing({
+      baseEditingUrl: 'https://acme.admin.datocms.com',
+      activate: 'always',
+      overlays: 'hover',
+      showBadge: false,
+      openInNewTab: true,
+      hoverLingerMs: 0,
+      onBeforeOpen
+    });
+
+    content.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 40, clientY: 24, pointerType: 'mouse' }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 40, clientY: 24 });
+    const preventDefaultSpy = vi.spyOn(clickEvent, 'preventDefault');
+
+    content.dispatchEvent(clickEvent);
+
+    expect(onBeforeOpen).toHaveBeenCalledTimes(1);
+    expect(onBeforeOpen).toHaveBeenCalledWith(
+      'https://acme.admin.datocms.com/editor/item_types/article/items/onbefore/edit#fieldPath=title',
+      expect.any(MouseEvent),
+      expect.objectContaining({ itemId: 'onbefore', fieldPath: 'title' })
+    );
+    expect(openSpy).not.toHaveBeenCalled();
+    expect(preventDefaultSpy).not.toHaveBeenCalled();
+
+    dispose();
+  });
+
+  it('falls back to explicit editUrl when deep link construction fails', async () => {
+    document.body.innerHTML = `
+      <div id="wrapper" data-datocms-edit-target data-datocms-edit-url="https://other.example.com/editor/items/42">
+        <span id="content">Explicit content</span>
+      </div>
+    `;
+
+    const wrapper = document.getElementById('wrapper')!;
+    const content = document.getElementById('content')!;
+
+    wrapper.getBoundingClientRect = () => createRect(10, 10, 180, 60);
+    content.getBoundingClientRect = () => createRect(20, 20, 160, 40);
+
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+    const dispose = enableDatoVisualEditing({
+      baseEditingUrl: 'https://acme.admin.datocms.com',
+      activate: 'always',
+      overlays: 'hover',
+      showBadge: false,
+      openInNewTab: true,
+      hoverLingerMs: 0
+    });
+
+    wrapper.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 20, clientY: 20 }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    wrapper.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 20, clientY: 20 }));
+
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://other.example.com/editor/items/42',
+      '_blank',
+      expect.stringContaining('noopener')
+    );
+
+    dispose();
+  });
+
+  it('enforces min hit size when provided as an object', async () => {
+    const payload = {
+      cms: 'datocms',
+      itemId: 'minhit',
+      itemTypeId: 'article',
+      fieldPath: 'title'
+    };
+    const encoded = vercelStegaCombine('Hit area', payload);
+
+    document.body.innerHTML = `<span id="content">${encoded}</span>`;
+    const content = document.getElementById('content')!;
+    content.getBoundingClientRect = () => createRect(100, 120, 12, 10);
+    textRectMap.set(content.firstChild as Text, [createRect(100, 120, 12, 10)]);
+
+    const dispose = enableDatoVisualEditing({
+      baseEditingUrl: 'https://acme.admin.datocms.com',
+      activate: 'always',
+      overlays: 'hover',
+      showBadge: false,
+      openInNewTab: true,
+      hoverLingerMs: 0,
+      hitPadding: 0,
+      minHitSize: { width: 44, height: 32 }
+    });
+
+    content.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 106, clientY: 125, pointerType: 'mouse' }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const overlayRoot = document.querySelector('div[aria-live="polite"]') as HTMLElement;
+    expect(overlayRoot).toBeTruthy();
+    expect(overlayRoot.style.width).toBe('44px');
+    expect(overlayRoot.style.height).toBe('32px');
+
+    dispose();
+  });
+
+  it('clears hover overlays immediately when hoverLingerMs is 0', async () => {
+    const payload = {
+      cms: 'datocms',
+      itemId: '1213',
+      itemTypeId: 'article',
+      fieldPath: 'title'
+    };
+    const encoded = vercelStegaCombine('Hover linger', payload);
+
+    document.body.innerHTML = `<p id="content">${encoded}</p>`;
+    const content = document.getElementById('content')!;
+    content.getBoundingClientRect = () => createRect(10, 10, 120, 24);
+    textRectMap.set(content.firstChild as Text, [createRect(10, 10, 120, 24)]);
+
+    const dispose = enableDatoVisualEditing({
+      baseEditingUrl: 'https://acme.admin.datocms.com',
+      activate: 'always',
+      overlays: 'hover',
+      showBadge: false,
+      openInNewTab: true,
+      hoverLingerMs: 0
+    });
+
+    content.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 20, clientY: 20 }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const overlayRoot = document.body.lastElementChild as HTMLElement;
+    expect(overlayRoot.style.display).toBe('block');
+
+    content.dispatchEvent(
+      new PointerEvent('pointermove', { bubbles: true, clientX: 9999, clientY: 9999, pointerType: 'mouse' })
+    );
+
+    expect(overlayRoot.style.display).toBe('none');
+
+    dispose();
+  });
+
+  it('applies custom badge label and hides overlay segments from assistive tech', async () => {
+    const payload = {
+      cms: 'datocms',
+      itemId: 'badge123',
+      itemTypeId: 'article',
+      fieldPath: 'title'
+    };
+    const encoded = vercelStegaCombine('Label test', payload);
+
+    document.body.innerHTML = `<p id="content">${encoded}</p>`;
+    const content = document.getElementById('content')!;
+    content.getBoundingClientRect = () => createRect(50, 60, 90, 24);
+    textRectMap.set(content.firstChild as Text, [createRect(50, 60, 90, 24)]);
+
+    const dispose = enableDatoVisualEditing({
+      baseEditingUrl: 'https://acme.admin.datocms.com',
+      activate: 'always',
+      overlays: 'hover',
+      showBadge: true,
+      badgeLabel: 'Apri in DatoCMS',
+      openInNewTab: true,
+      hoverLingerMs: 0
+    });
+
+    content.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, clientX: 70, clientY: 72, pointerType: 'mouse' }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const overlayRoot = document.querySelector('div[aria-live="polite"]') as HTMLElement;
+    expect(overlayRoot).toBeTruthy();
+
+    const badge = overlayRoot.querySelector('button');
+    expect(badge).toBeTruthy();
+    expect(badge?.getAttribute('aria-label')).toBe('Apri in DatoCMS');
+    expect(badge?.textContent).toBe('Apri in DatoCMS');
+
+    const segments = overlayRoot.querySelectorAll('[role="presentation"]');
+    expect(segments.length).toBeGreaterThan(0);
+    segments.forEach((segment) => {
+      expect(segment.getAttribute('aria-hidden')).toBe('true');
+    });
 
     dispose();
   });
@@ -276,7 +630,7 @@ describe('enableDatoVisualEditing', () => {
     expect(openSpy).toHaveBeenCalledWith(
       'https://acme.admin.datocms.com/editor/items/asset_1/edit#fieldPath=gallery.0.alt',
       '_blank',
-      'noopener'
+      expect.stringContaining('noopener')
     );
 
     dispose();

@@ -1,5 +1,4 @@
-import { vercelStegaSplit } from '@vercel/stega';
-import { stripStega } from '../decode/stega.js';
+import { splitStegaCached } from '../decode/splitCache.js';
 import { AUTO_CLEAN_ATTR } from '../utils/attr.js';
 
 export type AutoCleanOptions = {
@@ -111,12 +110,9 @@ function cleanPass(root: Element, opts: Required<AutoCleanOptions>): void {
     const parent = node.parentElement;
     const value = node.nodeValue ?? '';
     if (value && !isSkipped(parent, opts.skipSelectors)) {
-      const split = vercelStegaSplit(value);
-      if (split.encoded) {
-        const cleaned = stripStega(value);
-        if (cleaned !== value) {
-          node.nodeValue = cleaned;
-        }
+      const split = splitStegaCached(value);
+      if (split.encoded && split.cleaned !== value) {
+        node.nodeValue = split.cleaned;
       }
     }
     current = walker.nextNode();
@@ -135,13 +131,9 @@ function cleanPass(root: Element, opts: Required<AutoCleanOptions>): void {
     if (!alt) {
       return;
     }
-    const split = vercelStegaSplit(alt);
-    if (!split.encoded) {
-      return;
-    }
-    const cleaned = stripStega(alt);
-    if (cleaned !== alt) {
-      img.setAttribute('alt', cleaned);
+    const split = splitStegaCached(alt);
+    if (split.encoded && split.cleaned !== alt) {
+      img.setAttribute('alt', split.cleaned);
     }
   });
 }
