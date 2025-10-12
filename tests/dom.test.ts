@@ -186,6 +186,48 @@ describe('enableDatoVisualEditing', () => {
     dispose();
   });
 
+  it('warns when multiple stega payloads stamp the same element', () => {
+    const firstPayload = {
+      cms: 'datocms',
+      itemId: 'node-1',
+      fieldPath: 'title'
+    };
+    const secondPayload = {
+      cms: 'datocms',
+      itemId: 'node-2',
+      fieldPath: 'subtitle'
+    };
+
+    const firstEncoded = vercelStegaCombine('Primary title', firstPayload);
+    const secondEncoded = vercelStegaCombine('Secondary title', secondPayload);
+
+    const collide = document.createElement('p');
+    collide.id = 'collide';
+    collide.append(document.createTextNode(firstEncoded));
+    collide.append(document.createTextNode(secondEncoded));
+    document.body.appendChild(collide);
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const dispose = enableDatoVisualEditing({
+      baseEditingUrl: 'https://acme.admin.datocms.com'
+    });
+
+    expect(collide.getAttribute(ATTR_EDIT_URL)).toBe(
+      'https://acme.admin.datocms.com/editor/items/node-2/edit#fieldPath=subtitle'
+    );
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    const [message, elementArg] = warnSpy.mock.calls[0];
+    expect(message).toContain('Multiple stega payloads resolved to the same DOM element');
+    expect(message).toContain('Previously stamped edit URL');
+    expect(message).toContain('Incoming edit URL');
+    expect(message).toContain('data-datocms-edit-target');
+    expect(elementArg).toBe(collide);
+
+    dispose();
+  });
+
   it('only removes generated attributes on dispose', () => {
     document.body.innerHTML = `
       <div

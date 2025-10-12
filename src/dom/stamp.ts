@@ -22,9 +22,18 @@ export type EditInfo = {
   locale?: string;
 };
 
+const warnedCollisionElements = new WeakSet<Element>();
+
 export function stampAttributes(el: Element, info: EditInfo): void {
   if (el.hasAttribute(ATTR_EDIT_URL) && el.getAttribute(ATTR_GENERATED) !== GENERATED_VALUE) {
     return;
+  }
+
+  const existingGenerated = el.getAttribute(ATTR_GENERATED) === GENERATED_VALUE;
+  const existingUrl = el.getAttribute(ATTR_EDIT_URL);
+
+  if (existingGenerated && existingUrl && existingUrl !== info.editUrl) {
+    warnCollision(el, existingUrl, info.editUrl);
   }
 
   const next: Record<string, string> = {
@@ -85,4 +94,18 @@ export function clearGeneratedAttributes(root: ParentNode): void {
       el.removeAttribute(name);
     }
   });
+}
+
+function warnCollision(el: Element, originalUrl: string, nextUrl: string): void {
+  if (warnedCollisionElements.has(el)) {
+    return;
+  }
+  warnedCollisionElements.add(el);
+
+  const message =
+    '[datocms-visual-editing] Multiple stega payloads resolved to the same DOM element. ' +
+    `Previously stamped edit URL: ${originalUrl}. Incoming edit URL: ${nextUrl}. ` +
+    'Wrap each encoded block in its own element (for example by adding data-datocms-edit-target).';
+
+  console.warn(message, el);
 }

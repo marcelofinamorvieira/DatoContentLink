@@ -174,6 +174,7 @@ two approaches coexist happily: attributes always come from the DOM, so there is
 - **No overlay shows up:** confirm the rendered element has `data-datocms-edit-url`. If not, inspect the raw text/alt –
   you may be missing visual editing headers in your fetch.
 - **Wrong element is highlighted:** add `data-datocms-edit-target` to the wrapper you want to enlarge.
+- **Console warning about multiple stega payloads:** the library warns when two encoded strings resolve to the same DOM element. Split the content into dedicated wrappers (e.g. each with `data-datocms-edit-target`) so every edit URL has its own target.
 - **Links open in the same tab:** browser pop-up rules can block `window.open`. Allow pop-ups for your preview domain or
   change the behaviour by wrapping `enableDatoVisualEditing` and calling `window.location.assign` yourself.
 
