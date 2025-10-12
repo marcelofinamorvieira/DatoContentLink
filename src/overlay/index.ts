@@ -11,6 +11,8 @@ type Listener = [
 class HighlightOverlay {
   private root: HTMLDivElement | null = null;
   private visible = false;
+  private prevCursor: string | null = null;
+  private readonly padding = 8;
 
   constructor(private readonly doc: Document) {}
 
@@ -25,12 +27,14 @@ class HighlightOverlay {
       return;
     }
 
+    this.setCursorPointer();
+
     this.visible = true;
     this.root.style.display = 'block';
-    this.root.style.top = `${rect.top}px`;
-    this.root.style.left = `${rect.left}px`;
-    this.root.style.width = `${rect.width}px`;
-    this.root.style.height = `${rect.height}px`;
+    this.root.style.top = `${rect.top - this.padding}px`;
+    this.root.style.left = `${rect.left - this.padding}px`;
+    this.root.style.width = `${rect.width + this.padding * 2}px`;
+    this.root.style.height = `${rect.height + this.padding * 2}px`;
   }
 
   update(el: Element): void {
@@ -46,6 +50,7 @@ class HighlightOverlay {
     }
     this.visible = false;
     this.root.style.display = 'none';
+    this.resetCursor();
   }
 
   dispose(): void {
@@ -54,6 +59,7 @@ class HighlightOverlay {
     }
     this.root = null;
     this.visible = false;
+    this.resetCursor();
   }
 
   private ensureRoot(): void {
@@ -75,11 +81,37 @@ class HighlightOverlay {
     root.style.background = 'rgba(255, 119, 81, 0.12)';
     root.style.boxSizing = 'border-box';
     root.style.pointerEvents = 'none';
+    root.style.cursor = 'pointer';
     root.style.zIndex = '2147483646';
     root.style.display = 'none';
     root.setAttribute('aria-hidden', 'true');
     body.appendChild(root);
     this.root = root;
+  }
+
+  private setCursorPointer(): void {
+    const body = this.doc.body;
+    if (!body) {
+      return;
+    }
+    if (this.prevCursor === null) {
+      this.prevCursor = body.style.cursor;
+    }
+    body.style.cursor = 'pointer';
+  }
+
+  private resetCursor(): void {
+    if (this.prevCursor === null) {
+      return;
+    }
+    const body = this.doc.body;
+    if (!body) {
+      this.prevCursor = null;
+      return;
+    }
+    const previous = this.prevCursor;
+    this.prevCursor = null;
+    body.style.cursor = previous;
   }
 
   private measure(el: Element): { top: number; left: number; width: number; height: number } | null {
