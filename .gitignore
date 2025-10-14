@@ -2,5 +2,8 @@ node_modules/
 dist/
 .vscode/
 .env*
+!.env.example
+test/.env*
 .DS_Store
 coverage/
+AGENTS.md

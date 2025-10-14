@@ -34,17 +34,22 @@ npm install datocms-visual-editing
    });
    ```
 
-2. **Call `enableDatoVisualEditing` once your preview page renders.**
+2. **Instantiate `enableDatoVisualEditing` once your preview page renders.**
 
    ```ts
    import { enableDatoVisualEditing } from 'datocms-visual-editing';
 
-   const dispose = enableDatoVisualEditing({
+   const visualEditing = enableDatoVisualEditing({
      baseEditingUrl: 'https://acme.admin.datocms.com',
      environment: 'main'      // optional – attaches to every stamped element
    });
 
-   // Call `dispose()` if you unmount the page (SPA route change, etc.).
+   // Optional toggle button:
+   document
+     .getElementById('toggle-visual-editing')
+     ?.addEventListener('click', () => visualEditing.toggle());
+
+   // Call `visualEditing.dispose()` if you unmount the page (SPA route change, etc.).
    ```
 
 That’s it. On activation we scan the DOM, decode stega payloads, stamp attributes, scrub markers,
@@ -93,7 +98,7 @@ nearest wrapper so the overlay remains clickable.
 
 ## API Reference
 
-### `enableDatoVisualEditing(options): () => void`
+### `enableDatoVisualEditing(options): VisualEditingController`
 
 ```ts
 type EnableDatoVisualEditingOptions = {
@@ -101,12 +106,17 @@ type EnableDatoVisualEditingOptions = {
   environment?: string;     // optional environment slug for diagnostics + deep links
   root?: ParentNode;        // restrict scanning/observation to a subtree (default: document)
   debug?: boolean;          // expose debug attributes for in-browser inspection (default: false)
+  autoEnable?: boolean;     // set to false when you want manual enable/disable control (default: true)
 };
 ```
 
-Returns a disposer that removes overlays, observers, and generated attributes.
+Returns a controller with the following methods:
 
-> **SPA note:** call the disposer on route changes if you mount/unmount the preview surface manually.
+- `enable()` / `disable()` / `toggle()` – control overlays on demand.
+- `isEnabled()` / `isDisposed()` – expose state for UI bindings.
+- `dispose()` – permanently tear everything down and scrub generated attributes.
+
+> **SPA note:** call `dispose()` on route changes if you mount/unmount the preview surface manually. After disposal the controller becomes inert.
 
 ### Debug inspection toggle
 
@@ -117,7 +127,7 @@ Pass `debug: true` to stamp additional diagnostics on every editable element and
 - `data-datocms-debug-url` (the resolved deep link)
 - `data-datocms-debug-info` (JSON payload with the decoded metadata)
 
-These attributes make it easy to inspect the resolved editing info directly in DevTools. They are removed automatically when you call the disposer returned by `enableDatoVisualEditing`.
+These attributes make it easy to inspect the resolved editing info directly in DevTools. They are removed automatically when you call `dispose()` on the controller returned by `enableDatoVisualEditing`.
 
 ### `withContentLinkHeaders(fetchLike)`
 
@@ -150,14 +160,32 @@ Pass `root` to scope scanning and observation to a particular subtree (for examp
 ```ts
 const shadowRoot = document.querySelector('#preview-host')?.shadowRoot;
 if (shadowRoot) {
-  const dispose = enableDatoVisualEditing({
+  const visualEditing = enableDatoVisualEditing({
     baseEditingUrl: 'https://acme.admin.datocms.com',
-    root: shadowRoot
+    root: shadowRoot,
+    autoEnable: false
   });
+
+  visualEditing.enable();
 }
 ```
 
-We only touch nodes inside that root, and dispose removes attributes within the same boundary.
+We only touch nodes inside that root, and calling `dispose()` removes attributes within the same boundary.
+
+---
+
+## Integration testing
+
+The Vitest integration suite (`tests/dato.integration.test.ts`) talks to a live DatoCMS project.
+Create a `.env.visual-editing` file (use `.env.example` as a template) and provide:
+
+- `DATOCMS_VISUAL_EDITING_TOKEN` – Preview Content API token.
+- `DATOCMS_VISUAL_EDITING_BASE_URL` – project admin URL, e.g. `https://yourproject.admin.datocms.com`.
+- Optional: `DATOCMS_VISUAL_EDITING_GRAPHQL_URL` when using a custom preview endpoint.
+
+Vitest automatically loads `.env.visual-editing`, `.env.test`, `.env.local`, and `.env` before running, so once the file exists you can run `pnpm run test` without exporting variables manually.
+
+The `test/inspectStega.mjs` helper reuses the same variables, so no extra setup is required.
 
 ---
 

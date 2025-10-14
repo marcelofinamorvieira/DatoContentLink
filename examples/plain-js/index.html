@@ -29,6 +29,8 @@
       editing headers.
     </p>
 
+    <button id="toggle-overlays" type="button">Disable visual editing</button>
+
     <article class="card" data-datocms-edit-target>
       <h2 id="hero-title">Loading…</h2>
       <p id="hero-copy">Fetching from DatoCMS Content Delivery API…</p>
@@ -82,9 +84,19 @@
         console.error('Failed to load DatoCMS content', error);
       });
 
-      enableDatoVisualEditing({
+      const controller = enableDatoVisualEditing({
         baseEditingUrl: BASE_EDITING_URL
       });
+
+      const toggleButton = document.getElementById('toggle-overlays');
+      if (toggleButton) {
+        toggleButton.addEventListener('click', () => {
+          controller.toggle();
+          toggleButton.textContent = controller.isEnabled()
+            ? 'Disable visual editing'
+            : 'Enable visual editing';
+        });
+      }
     </script>
   </body>
 </html>

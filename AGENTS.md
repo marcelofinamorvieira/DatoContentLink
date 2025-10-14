@@ -1,31 +1,33 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `src/` hosts the TypeScript source; features live in focused folders (`decode/`, `dom/`, `net/`, `overlay/`, `react/`), while `src/index.ts` re-exports the public API.
-- `dist/` contains compiled ESM output and declarations from the build process—never modify generated files directly.
-- `tests/` stores Vitest specs (unit and integration), and `test/inspectStega.mjs` offers reusable helpers for steganography assertions.
-- `examples/` provides manual verification snippets; keep them updated with the latest APIs to avoid drift.
+- Keep implementation under `src/`; feature folders (`decode/`, `dom/`, `net/`, `overlay/`, `react/`) isolate domains while `src/index.ts` re-exports the public API.
+- Generated bundles and declarations land in `dist/`; treat them as read-only and regenerate via `pnpm run build`.
+- Vitest suites live in `tests/`, with reusable steganography helpers in `test/inspectStega.mjs`. Import from there instead of duplicating fixtures.
+- Use `examples/` for manual verification snippets and refresh them whenever the exported API changes.
 
 ## Build, Test, and Development Commands
-- `pnpm install` installs dependencies; the toolchain expects Node.js 18 or newer.
-- `pnpm run build` cleans and compiles via `tsc`, emitting distributables into `dist/`.
-- `pnpm run test` runs the full Vitest suite once—mirror CI by using this before opening a PR.
-- `pnpm run test:watch` starts Vitest in watch mode for rapid feedback during feature work.
-- `pnpm run clean` removes `dist/`, ensuring subsequent builds start from a blank slate.
+- `pnpm install` installs dependencies (Node.js ≥18 as enforced in `package.json`).
+- `pnpm run build` clears `dist/` then compiles TypeScript with `tsc`.
+- `pnpm run test` runs the full Vitest suite once; `pnpm run test:watch` keeps the runner hot during feature work.
+- `pnpm run clean` removes `dist/`. Publishing relies on `pnpm run prepublishOnly`, which chains build + tests.
 
 ## Coding Style & Naming Conventions
-- Adhere to the strict TypeScript settings in `tsconfig.json`; avoid `any` and prefer explicit interfaces or utility types in `src/types.ts`.
-- Keep indentation at two spaces, rely on named exports, and favor small, reusable utilities under `src/utils/`.
-- File names remain descriptive kebab-case (`buildDatoDeepLink.ts`, `withContentLinkHeaders.ts`); types and enums use PascalCase, functions and variables use camelCase.
-- When adding React hooks or components, place them under `src/react/` and mirror the existing folder hierarchy to simplify imports.
+- Strict TypeScript config forbids `any`; favor explicit interfaces or shared helpers in `src/utils/`.
+- Use two-space indentation, camelCase for variables/functions, PascalCase for types/enums, and descriptive filenames such as `buildDatoDeepLink.ts` or `withContentLinkHeaders.ts`.
+- Prefer named exports and colocate React hooks or components under `src/react/` to keep imports consistent.
 
 ## Testing Guidelines
-- Co-locate new unit tests with peers in `tests/*.test.ts`, matching filenames to modules when possible.
-- Use Vitest + JSDOM helpers (configured in `vitest.config.ts`) to simulate DOM behavior; import steganography fixtures from `test/inspectStega.mjs` for integration flows.
-- Run `pnpm run test` locally before pushing; add regression coverage whenever modifying parsing, DOM mutation, or network code.
-- Document any required environment variables or DatoCMS credentials in the PR if a test setup depends on them.
+- Create specs in `tests/<module>.test.ts`; align describe blocks with the feature folders for clarity.
+- Use Vitest’s JSDOM environment (see `vitest.config.ts`) for DOM behaviour and import `test/inspectStega.mjs` helpers when validating overlay decoding.
+- Run `pnpm run test` before committing and extend coverage whenever parsing, DOM mutation, or network utilities change.
 
 ## Commit & Pull Request Guidelines
-- Follow the existing history: concise, present-tense summaries under 60 characters (`add overlay helpers`, `fix decode guard`), grouping related changes per commit.
-- PRs should describe intent, outline testing evidence (`pnpm run test` output), and link relevant issues or tickets.
-- Include screenshots or screencasts when UI overlays change, flag breaking API updates, and mention documentation edits in `README.md` or `examples/` as applicable.
+- Follow local history: concise, present-tense commit subjects under ~60 characters (e.g., `fix decode guard`).
+- Pull requests should state intent, link issues, and include local `pnpm run test` output. Attach screenshots or screencasts when overlay UI shifts.
+- Flag breaking API updates in the PR body and mirror changes in `README.md` or `examples/`.
+
+## Security & Configuration Tips
+- Keep DatoCMS credentials in local `.env` files and exclude them from commits.
+- Verify preview or demo endpoints use HTTPS before sharing overlay builds externally.
+- Until the first public release, backward compatibility is optional—opt for clear, maintainable APIs over legacy shims.

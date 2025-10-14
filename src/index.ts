@@ -2,7 +2,7 @@ export { enableDatoVisualEditing } from './enable.js';
 export { withContentLinkHeaders } from './net/withContentLinkHeaders.js';
 export { decodeStega, stripStega } from './decode/stega.js';
 export { autoCleanStegaWithin, enableDatoAutoClean } from './dom/autoClean.js';
-export type { EnableDatoVisualEditingOptions } from './types.js';
+export type { EnableDatoVisualEditingOptions, VisualEditingController } from './types.js';
 export type { DecodedInfo } from './decode/types.js';
 export {
   buildEditTagAttributes,

@@ -7,4 +7,18 @@ export type EnableDatoVisualEditingOptions = {
    * Default: false.
    */
   debug?: boolean;
+  /**
+   * Automatically start the visual editing observers on creation.
+   * Default: true.
+   */
+  autoEnable?: boolean;
+};
+
+export type VisualEditingController = {
+  enable(): void;
+  disable(): void;
+  toggle(): void;
+  dispose(): void;
+  isEnabled(): boolean;
+  isDisposed(): boolean;
 };

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+- Refactor `enableDatoVisualEditing` to return a controller with `enable`, `disable`, `toggle`, `dispose`, and state helpers (`isEnabled`, `isDisposed`).
+- Add `autoEnable` option for manual control flows and expose toggle-ready examples in plain JS and Next.js demos.
+- Update tests and documentation to cover overlay toggling and controller lifecycle semantics.
+- Unify preview environment variables under `DATOCMS_VISUAL_EDITING_*` and load them via shared dotenv setup (includes CLI helper support).
+
 ## 0.7.1 - 2025-10-11
 - Initial public release of `datocms-visual-editing`.
 - Click-to-edit overlays for content rendered from DatoCMS.

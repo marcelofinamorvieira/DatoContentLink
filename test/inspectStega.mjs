@@ -1,35 +1,38 @@
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { existsSync } from 'node:fs';
+import { config } from 'dotenv';
 import { withContentLinkHeaders, decodeStega, stripStega } from '../dist/index.js';
 import { buildDatoDeepLink } from '../dist/link/buildDatoDeepLink.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const envFile = path.join(__dirname, '.env');
+const ENV_FILES = [
+  '.env',
+  '.env.local',
+  '.env.test',
+  '.env.test.local',
+  '.env.visual-editing',
+  '.env.visual-editing.local',
+  'test/.env',
+  'test/.env.local'
+];
 
-if (fs.existsSync(envFile)) {
-  const lines = fs.readFileSync(envFile, 'utf8').split(/\r?\n/);
-  for (const line of lines) {
-    if (!line || line.trim().startsWith('#')) {
-      continue;
-    }
-    const [key, ...rest] = line.split('=');
-    if (key && rest.length) {
-      const value = rest.join('=').trim();
-      if (!(key in process.env) && value) {
-        process.env[key.trim()] = value;
-      }
-    }
+for (const file of ENV_FILES) {
+  const filePath = path.join(process.cwd(), file);
+  if (existsSync(filePath)) {
+    config({ path: filePath, override: false });
   }
 }
 
-const BASE_EDITING_URL = process.env.DATOCMS_EDIT_URL;
-const API_TOKEN = process.env.DATOCMS_TOKEN;
+const BASE_EDITING_URL = process.env.DATOCMS_VISUAL_EDITING_BASE_URL;
+const API_TOKEN = process.env.DATOCMS_VISUAL_EDITING_TOKEN;
 
 if (!BASE_EDITING_URL || !API_TOKEN) {
-  console.error('Missing DATOCMS_EDIT_URL or DATOCMS_TOKEN environment variables.');
-  console.error('Set them in test/.env or pass inline, e.g.');
-  console.error('  DATOCMS_EDIT_URL=https://yourproject.admin.datocms.com DATOCMS_TOKEN=xyz node test/inspectStega.mjs');
+  console.error('Missing DATOCMS_VISUAL_EDITING_BASE_URL or DATOCMS_VISUAL_EDITING_TOKEN environment variables.');
+  console.error('Create .env.visual-editing (see .env.example) or pass values inline, e.g.');
+  console.error(
+    '  DATOCMS_VISUAL_EDITING_BASE_URL=https://yourproject.admin.datocms.com DATOCMS_VISUAL_EDITING_TOKEN=xyz node test/inspectStega.mjs'
+  );
   process.exit(1);
 }
 

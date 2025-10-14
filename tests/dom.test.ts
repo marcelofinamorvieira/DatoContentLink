@@ -74,7 +74,7 @@ describe('enableDatoVisualEditing', () => {
       </main>
     `;
 
-    const dispose = enableDatoVisualEditing({
+    const controller = enableDatoVisualEditing({
       baseEditingUrl: 'https://acme.admin.datocms.com',
       environment: 'main'
     });
@@ -98,7 +98,7 @@ describe('enableDatoVisualEditing', () => {
     );
     expect(heroImage.getAttribute('alt')).toBe('Hero image alt');
 
-    dispose();
+    controller.dispose();
 
     expect(heroText.hasAttribute(ATTR_EDIT_URL)).toBe(false);
     expect(heroText.hasAttribute(ATTR_GENERATED)).toBe(false);
@@ -121,7 +121,7 @@ describe('enableDatoVisualEditing', () => {
 
     const decodeSpy = vi.spyOn(decodeModule, 'decodeStega');
 
-    const dispose = enableDatoVisualEditing({
+    const controller = enableDatoVisualEditing({
       baseEditingUrl: 'https://acme.admin.datocms.com'
     });
 
@@ -152,14 +152,14 @@ describe('enableDatoVisualEditing', () => {
     );
     expect(decodeSpy).not.toHaveBeenCalled();
 
-    dispose();
+    controller.dispose();
   });
 
   it('re-marks new stega content via MutationObserver', async () => {
     document.body.innerHTML = `<section id="container"></section>`;
     const container = document.getElementById('container') as HTMLElement;
 
-    const dispose = enableDatoVisualEditing({
+    const controller = enableDatoVisualEditing({
       baseEditingUrl: 'https://acme.admin.datocms.com'
     });
 
@@ -183,7 +183,7 @@ describe('enableDatoVisualEditing', () => {
     expect(paragraph.getAttribute(ATTR_GENERATED)).toBe('stega');
     expect(paragraph.textContent).toBe('Fresh content');
 
-    dispose();
+    controller.dispose();
   });
 
   it('warns when multiple stega payloads stamp the same element', () => {
@@ -209,7 +209,7 @@ describe('enableDatoVisualEditing', () => {
 
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    const dispose = enableDatoVisualEditing({
+    const controller = enableDatoVisualEditing({
       baseEditingUrl: 'https://acme.admin.datocms.com'
     });
 
@@ -225,7 +225,7 @@ describe('enableDatoVisualEditing', () => {
     expect(message).toContain('data-datocms-edit-target');
     expect(elementArg).toBe(collide);
 
-    dispose();
+    controller.dispose();
   });
 
   it('only removes generated attributes on dispose', () => {
@@ -248,14 +248,14 @@ describe('enableDatoVisualEditing', () => {
     const encodedParagraph = document.getElementById('encoded') as HTMLElement;
     encodedParagraph.textContent = encoded;
 
-    const dispose = enableDatoVisualEditing({
+    const controller = enableDatoVisualEditing({
       baseEditingUrl: 'https://acme.admin.datocms.com'
     });
 
     const manual = document.getElementById('manual') as HTMLElement;
     expect(manual.getAttribute('data-datocms-item-id')).toBe('manual-1');
 
-    dispose();
+    controller.dispose();
 
     expect(manual.getAttribute('data-datocms-edit-url')).toBe(
       'https://acme.admin.datocms.com/editor/items/manual-1/edit'
@@ -291,7 +291,7 @@ describe('enableDatoVisualEditing', () => {
     const wrappedImage = document.getElementById('wrapped-image') as HTMLImageElement;
     wrappedImage.getBoundingClientRect = () => createRect(0, 0, 0, 0);
 
-    const dispose = enableDatoVisualEditing({
+    const controller = enableDatoVisualEditing({
       baseEditingUrl: 'https://acme.admin.datocms.com'
     });
 
@@ -309,6 +309,76 @@ describe('enableDatoVisualEditing', () => {
     );
     expect(wrappedImage.getAttribute('alt')).toBe('Wrapped image');
 
-    dispose();
+    controller.dispose();
+  });
+
+  it('can disable and re-enable visual editing without losing context', () => {
+    const firstPayload = {
+      cms: 'datocms',
+      itemId: 'item-1',
+      fieldPath: 'content.title'
+    };
+    const secondPayload = {
+      cms: 'datocms',
+      itemId: 'item-2',
+      fieldPath: 'content.title'
+    };
+
+    const firstEncoded = vercelStegaCombine('Primary title', firstPayload);
+    const secondEncoded = vercelStegaCombine('Updated title', secondPayload);
+
+    document.body.innerHTML = `<h1 id="headline">${firstEncoded}</h1>`;
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const controller = enableDatoVisualEditing({
+      baseEditingUrl: 'https://acme.admin.datocms.com'
+    });
+
+    const heading = document.getElementById('headline') as HTMLElement;
+    expect(heading.getAttribute(ATTR_ITEM_ID)).toBe('item-1');
+    expect(heading.textContent).toBe('Primary title');
+
+    controller.disable();
+
+    heading.textContent = secondEncoded;
+    expect(heading.getAttribute(ATTR_ITEM_ID)).toBe('item-1');
+    expect(heading.textContent).toBe(secondEncoded);
+
+    controller.enable();
+
+    expect(heading.getAttribute(ATTR_ITEM_ID)).toBe('item-2');
+    expect(heading.textContent).toBe('Updated title');
+
+    controller.dispose();
+    warnSpy.mockRestore();
+  });
+
+  it('exposes state helpers for manual toggle flows', () => {
+    document.body.innerHTML = `<p id="content"></p>`;
+
+    const controller = enableDatoVisualEditing({
+      baseEditingUrl: 'https://acme.admin.datocms.com',
+      autoEnable: false
+    });
+
+    expect(controller.isEnabled()).toBe(false);
+    expect(controller.isDisposed()).toBe(false);
+
+    controller.enable();
+    expect(controller.isEnabled()).toBe(true);
+
+    controller.toggle();
+    expect(controller.isEnabled()).toBe(false);
+
+    controller.toggle();
+    expect(controller.isEnabled()).toBe(true);
+
+    controller.dispose();
+    expect(controller.isDisposed()).toBe(true);
+    expect(controller.isEnabled()).toBe(false);
+
+    controller.enable();
+    expect(controller.isEnabled()).toBe(false);
   });
 });

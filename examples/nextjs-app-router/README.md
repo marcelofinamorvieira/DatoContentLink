@@ -5,7 +5,7 @@ This minimal example shows how to wire up DatoCMS Visual Editing inside a Next.j
 ## Key pieces
 
 - `lib/datoClient.ts`: wraps `fetch` with `withContentLinkHeaders` so every preview query sends the required headers.
-- `components/PreviewVisualEditing.tsx`: tiny client component that calls `enableDatoVisualEditing` when preview mode is active.
+- `components/PreviewVisualEditing.tsx`: tiny client component that enables visual editing and disposes the controller when preview mode deactivates.
 - `app/page.tsx`: server component that fetches preview content and mounts the helper when `draftMode()` is enabled.
 
 ## Usage

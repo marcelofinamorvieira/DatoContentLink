@@ -10,13 +10,13 @@ type PreviewVisualEditingProps = {
 
 export function PreviewVisualEditing({ baseEditingUrl, environment }: PreviewVisualEditingProps) {
   useEffect(() => {
-    const disposeVisualEditing = enableDatoVisualEditing({
+    const controller = enableDatoVisualEditing({
       baseEditingUrl,
       environment
     });
 
     return () => {
-      disposeVisualEditing?.();
+      controller.dispose();
     };
   }, [baseEditingUrl, environment]);
 

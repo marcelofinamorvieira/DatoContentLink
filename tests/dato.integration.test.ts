@@ -243,7 +243,7 @@ function parseDatoHref(href: string) {
       </article>
     `;
 
-    const dispose = enableDatoVisualEditing({
+    const controller = enableDatoVisualEditing({
       baseEditingUrl
     });
 
@@ -259,7 +259,48 @@ function parseDatoHref(href: string) {
     expect(heroTitleEl?.getAttribute(ATTR_GENERATED)).toBe('stega');
     expect(heroTitleEl?.textContent).toBe(stripStega(heroSection.heroTitle));
 
-    dispose();
+    controller.dispose();
+    document.body.innerHTML = '';
+  });
+
+  it('allows toggling overlays on demand', () => {
+    const heroSection = findSection(previewHome, 'HeroSectionRecord') as Section & {
+      heroTitle: string;
+      heroSubtitle: string;
+    };
+
+    document.body.innerHTML = `<p id="hero-toggle">${heroSection.heroTitle}</p>`;
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const controller = enableDatoVisualEditing({
+      baseEditingUrl,
+      autoEnable: false
+    });
+
+    expect(controller.isEnabled()).toBe(false);
+
+    controller.enable();
+
+    const element = document.getElementById('hero-toggle');
+    expect(element).toBeTruthy();
+
+    const initialUrl = element?.getAttribute(ATTR_EDIT_URL) ?? '';
+    expect(initialUrl).toContain('hero');
+
+    controller.disable();
+
+    element!.textContent = heroSection.heroSubtitle;
+    expect(element?.getAttribute(ATTR_EDIT_URL)).toBe(initialUrl);
+
+    controller.enable();
+
+    const updatedUrl = element?.getAttribute(ATTR_EDIT_URL) ?? '';
+    expect(updatedUrl).not.toBe(initialUrl);
+    expect(updatedUrl).toMatch(/hero[_-]?subtitle/i);
+
+    controller.dispose();
+    warnSpy.mockRestore();
     document.body.innerHTML = '';
   });
 });
