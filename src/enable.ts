@@ -39,7 +39,7 @@ class VisualEditingControllerImpl implements VisualEditingController {
   private enabled = false;
   private disposed = false;
 
-  constructor(private readonly options: EnableDatoVisualEditingOptions) {
+  constructor(options: EnableDatoVisualEditingOptions) {
     const baseEditingUrl = normalizeBaseUrl(options.baseEditingUrl);
     this.root = options.root ?? document;
     const resolvedDoc =
