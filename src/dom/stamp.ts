@@ -7,6 +7,7 @@ import {
   ATTR_GENERATED,
   GENERATED_VALUE,
   EDIT_ATTRS,
+  ATTR_EDITABLE,
   ATTR_DEBUG,
   ATTR_DEBUG_INFO,
   ATTR_DEBUG_URL,
@@ -24,9 +25,9 @@ export type EditInfo = {
 
 const warnedCollisionElements = new WeakSet<Element>();
 
-export function stampAttributes(el: Element, info: EditInfo): void {
+export function stampAttributes(el: Element, info: EditInfo): boolean {
   if (el.hasAttribute(ATTR_EDIT_URL) && el.getAttribute(ATTR_GENERATED) !== GENERATED_VALUE) {
-    return;
+    return false;
   }
 
   const existingGenerated = el.getAttribute(ATTR_GENERATED) === GENERATED_VALUE;
@@ -62,9 +63,17 @@ export function stampAttributes(el: Element, info: EditInfo): void {
     }
   }
 
-  if (changed || !el.hasAttribute(ATTR_GENERATED)) {
+  let generatedStamped = false;
+  if (!existingGenerated) {
+    el.setAttribute(ATTR_GENERATED, GENERATED_VALUE);
+    generatedStamped = true;
+  } else if (changed) {
     el.setAttribute(ATTR_GENERATED, GENERATED_VALUE);
   }
+
+  el.setAttribute(ATTR_EDITABLE, '');
+
+  return changed || generatedStamped;
 }
 
 export function stampDebugAttributes(
@@ -93,6 +102,7 @@ export function clearGeneratedAttributes(root: ParentNode): void {
     for (const name of EDIT_ATTRS) {
       el.removeAttribute(name);
     }
+    el.removeAttribute(ATTR_EDITABLE);
   });
 }
 

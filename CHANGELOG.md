@@ -8,6 +8,13 @@ All notable changes to this project will be documented in this file.
 - Update tests and documentation to cover overlay toggling and controller lifecycle semantics.
 - Unify preview environment variables under `DATOCMS_VISUAL_EDITING_*` and load them via shared dotenv setup (includes CLI helper support).
 
+## 0.8.0 - 2025-10-16
+- Controller: new public `refresh(root?)` plus lifecycle callbacks (`onReady`, `onMarked`, `onStateChange`, `onWarning`) and DOM events (`EVENT_READY`, `EVENT_MARKED`, `EVENT_STATE`, `EVENT_WARN`).
+- Debugging: added `checkStegaState(root?)`, optional `devPanel` overlay, `DatoVisualEditingDevPanel` React component, and `data-datocms-editable` flag on every target.
+- React: introduced `useDatoVisualEditingListen` for Dato “Listen” streaming previews.
+- Warnings: development builds now surface a single notification when `enable()` finds zero editables (common when DOM nodes were replaced during streaming).
+- Docs & examples: expanded streaming guidance, linked listen-ready examples (Next.js App Router + Pages Router + Remix), and updated README to cover the new APIs.
+
 ## 0.7.1 - 2025-10-11
 - Initial public release of `datocms-visual-editing`.
 - Click-to-edit overlays for content rendered from DatoCMS.

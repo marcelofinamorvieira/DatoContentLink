@@ -1,10 +1,17 @@
-import { ATTR_EDIT_TARGET } from '../constants.js';
+import {
+  ATTR_EDIT_TARGET,
+  ATTR_EDIT_URL,
+  ATTR_GENERATED,
+  GENERATED_VALUE,
+  ATTR_EDITABLE
+} from '../constants.js';
 import { stampAttributes, stampDebugAttributes, type EditInfo } from '../dom/stamp.js';
 import { decodeStega } from '../decode/stega.js';
 import { type DecodedInfo } from '../decode/types.js';
 import { buildDatoDeepLink } from '../link/buildDatoDeepLink.js';
 import { fromDecoded, safeStringify } from '../utils/debug.js';
 import { splitStega } from './split.js';
+import type { MarkSummary } from '../types.js';
 
 type MarkContext = {
   baseEditingUrl: string;
@@ -13,14 +20,20 @@ type MarkContext = {
   debug?: boolean;
 };
 
-export function markDOMFromStega(ctx: MarkContext): void {
+export function markDOMFromStega(ctx: MarkContext): MarkSummary {
   const docCtor = typeof Document !== 'undefined' ? Document : undefined;
   const globalDoc = typeof document !== 'undefined' ? document : undefined;
   const doc =
     (docCtor && ctx.root instanceof docCtor ? (ctx.root as Document) : ctx.root.ownerDocument ?? globalDoc) ?? null;
 
   if (!doc) {
-    return;
+    return {
+      editableTotal: 0,
+      generatedStamped: 0,
+      generatedUpdated: 0,
+      explicitTotal: 0,
+      scope: ctx.root
+    };
   }
 
   const walker = doc.createTreeWalker(ctx.root, NodeFilter.SHOW_TEXT);
@@ -41,6 +54,9 @@ export function markDOMFromStega(ctx: MarkContext): void {
     }
     textNodes.push(current);
   }
+
+  const stampedTargets = new Set<Element>();
+  const updatedTargets = new Set<Element>();
 
   for (const node of textNodes) {
     const value = node.nodeValue ?? '';
@@ -64,7 +80,14 @@ export function markDOMFromStega(ctx: MarkContext): void {
     if (!info) {
       continue;
     }
-    stampAttributes(target, info);
+    const wasGenerated = target.getAttribute(ATTR_GENERATED) === GENERATED_VALUE;
+    const changed = stampAttributes(target, info);
+    if (!wasGenerated || changed) {
+      stampedTargets.add(target);
+    }
+    if (wasGenerated && changed) {
+      updatedTargets.add(target);
+    }
     if (ctx.debug) {
       const debugPayload = fromDecoded(
         'stega',
@@ -108,7 +131,14 @@ export function markDOMFromStega(ctx: MarkContext): void {
       return;
     }
     const target = preferWrapperIfZeroSize(img) ?? resolveTarget(img);
-    stampAttributes(target, info);
+    const wasGenerated = target.getAttribute(ATTR_GENERATED) === GENERATED_VALUE;
+    const changed = stampAttributes(target, info);
+    if (!wasGenerated || changed) {
+      stampedTargets.add(target);
+    }
+    if (wasGenerated && changed) {
+      updatedTargets.add(target);
+    }
     if (ctx.debug) {
       const debugPayload = fromDecoded(
         'stega',
@@ -129,6 +159,21 @@ export function markDOMFromStega(ctx: MarkContext): void {
       img.setAttribute('alt', split.cleaned);
     }
   });
+
+  const all = Array.from(scope.querySelectorAll<HTMLElement>(`[${ATTR_EDIT_URL}]`));
+  all.forEach((el) => {
+    el.setAttribute(ATTR_EDITABLE, '');
+  });
+  const generated = all.filter((el) => el.getAttribute(ATTR_GENERATED) === GENERATED_VALUE);
+  const summary: MarkSummary = {
+    editableTotal: all.length,
+    generatedStamped: stampedTargets.size,
+    generatedUpdated: updatedTargets.size,
+    explicitTotal: all.length - generated.length,
+    scope: ctx.root
+  };
+
+  return summary;
 }
 
 function resolveTarget(start: Element): Element {

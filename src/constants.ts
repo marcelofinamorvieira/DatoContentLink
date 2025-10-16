@@ -6,6 +6,12 @@ export const ATTR_LOCALE = 'data-datocms-locale';
 export const ATTR_GENERATED = 'data-datocms-generated';
 export const GENERATED_VALUE = 'stega';
 export const ATTR_EDIT_TARGET = 'data-datocms-edit-target';
+export const ATTR_EDITABLE = 'data-datocms-editable';
+
+export const EVENT_READY = 'datocms:visual-editing:ready';
+export const EVENT_MARKED = 'datocms:visual-editing:marked';
+export const EVENT_STATE = 'datocms:visual-editing:state';
+export const EVENT_WARN = 'datocms:visual-editing:warn';
 
 export const ATTR_DEBUG = 'data-datocms-debug';
 export const ATTR_DEBUG_INFO = 'data-datocms-debug-info';

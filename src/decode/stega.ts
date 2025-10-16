@@ -1,5 +1,6 @@
 import { vercelStegaDecode, vercelStegaSplit } from '@vercel/stega';
 import { DecodedInfo } from './types.js';
+import { extractFieldPathFromUrl } from '../link/fieldPath.js';
 
 export function decodeStega(
   input: string,
@@ -132,10 +133,8 @@ function deriveDatoInfoFromHref(href: string): {
       }
     }
 
-    let fieldPath: string | undefined;
-    if (url.hash && url.hash.startsWith('#fieldPath=')) {
-      fieldPath = decodeURIComponent(url.hash.slice('#fieldPath='.length));
-    }
+    const extractedFieldPath = extractFieldPathFromUrl(href);
+    const fieldPath = extractedFieldPath ?? undefined;
 
     return { itemId, itemTypeId, fieldPath, environment };
   } catch {

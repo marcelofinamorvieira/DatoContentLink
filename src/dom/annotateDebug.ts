@@ -1,8 +1,4 @@
-import {
-  ATTR_EDIT_URL,
-  ATTR_GENERATED,
-  GENERATED_VALUE
-} from '../constants.js';
+import { ATTR_EDIT_URL, ATTR_GENERATED, GENERATED_VALUE, ATTR_EDITABLE } from '../constants.js';
 import { readExplicitInfo } from '../utils/attr.js';
 import { stampDebugAttributes } from './stamp.js';
 import { fromDecoded, safeStringify } from '../utils/debug.js';
@@ -27,6 +23,8 @@ export function annotateExplicitTargetsForDebug(ctx: AnnotateContext): void {
     if (generated) {
       return;
     }
+
+    el.setAttribute(ATTR_EDITABLE, '');
 
     const explicit = readExplicitInfo(el);
     const payload = fromDecoded(

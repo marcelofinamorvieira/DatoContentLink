@@ -57,6 +57,12 @@ and start a single `MutationObserver` to keep new nodes in sync. Overlays are li
 
 ---
 
+### Streaming & rehydration
+
+When streaming preview responses (React Server Components, Remix responses, or SSE “Listen” updates), reuse the exact DOM nodes that shipped from the server. The `_editingUrl` metadata travels on those elements; replacing them breaks overlays. Mutate text/attributes in place and call `controller.refresh(root?)` after the new markup lands (or use the `useDatoVisualEditingListen` hook below). The controller batches rescans, fires lifecycle events, and—in development—warns once if the initial enable detects zero editables (a common signal that the DOM was replaced). Copy-pasteable setups live under `examples/nextjs-listen-app-router`, `examples/nextjs-listen-pages-router`, and `examples/remix-listen`.
+
+---
+
 ## Attribute contract
 
 Every editable target receives the following attributes (if the data exists):
@@ -64,6 +70,7 @@ Every editable target receives the following attributes (if the data exists):
 | Attribute | Purpose |
 | --- | --- |
 | `data-datocms-edit-url` | Fully-qualified deep link to the record and field in the DatoCMS editor. |
+| `data-datocms-editable` | Convenience flag stamped on every editable target (explicit or generated). |
 | `data-datocms-item-id` | Record ID (diagnostics) |
 | `data-datocms-item-type-id` | Model API key/ID (diagnostics) |
 | `data-datocms-environment` | Environment slug when provided |
@@ -107,6 +114,13 @@ type EnableDatoVisualEditingOptions = {
   root?: ParentNode;        // restrict scanning/observation to a subtree (default: document)
   debug?: boolean;          // expose debug attributes for in-browser inspection (default: false)
   autoEnable?: boolean;     // set to false when you want manual enable/disable control (default: true)
+  devPanel?: boolean | {    // show a floating dev counter panel in dev builds
+    position?: 'br' | 'bl' | 'tr' | 'tl';
+  };
+  onReady?: (summary: MarkSummary) => void;
+  onMarked?: (summary: MarkSummary) => void;
+  onStateChange?: (state: { enabled: boolean; disposed: boolean }) => void;
+  onWarning?: (warning: { code: string; message: string }) => void;
 };
 ```
 
@@ -115,8 +129,18 @@ Returns a controller with the following methods:
 - `enable()` / `disable()` / `toggle()` – control overlays on demand.
 - `isEnabled()` / `isDisposed()` – expose state for UI bindings.
 - `dispose()` – permanently tear everything down and scrub generated attributes.
+- `refresh(root?)` – queue a stega rescan for the whole root or a specific subtree (handy after streaming updates).
 
 > **SPA note:** call `dispose()` on route changes if you mount/unmount the preview surface manually. After disposal the controller becomes inert.
+
+Lifecycle callbacks receive a `MarkSummary` object (`editableTotal`, `generatedStamped`, `generatedUpdated`, `explicitTotal`, and the processed `scope`). The same payload is dispatched as DOM `CustomEvent`s:
+
+- `datocms:visual-editing:ready` (exported as `EVENT_READY`)
+- `datocms:visual-editing:marked` (exported as `EVENT_MARKED`)
+- `datocms:visual-editing:state` (exported as `EVENT_STATE`)
+- `datocms:visual-editing:warn` (exported as `EVENT_WARN`)
+
+Warnings fire only in development (for example when enable() finds zero editables) and surface through both the `onWarning` callback and the DOM event.
 
 ### Debug inspection toggle
 
@@ -128,6 +152,12 @@ Pass `debug: true` to stamp additional diagnostics on every editable element and
 - `data-datocms-debug-info` (JSON payload with the decoded metadata)
 
 These attributes make it easy to inspect the resolved editing info directly in DevTools. They are removed automatically when you call `dispose()` on the controller returned by `enableDatoVisualEditing`.
+
+### Dev panel & state inspectors
+
+- Set `devPanel: true` (or `{ position: 'tr' | 'tl' | 'br' | 'bl' }`) to spawn a lightweight overlay with live counters while developing.
+- Use `checkStegaState(root?)` to get programmatic insight into editable totals, generated vs. explicit counts, info-only attributes, and leftover encoded markers.
+- Drop the `DatoVisualEditingDevPanel` React component anywhere inside your preview shell to render the same diagnostics using JSX.
 
 ### `withContentLinkHeaders(fetchLike)`
 
@@ -142,6 +172,8 @@ Utility helpers to scrub stega markers from a subtree on demand. They complement
 
 - `useDatoAutoClean(ref, options)` – React hook that runs `autoCleanStegaWithin`.
 - `DatoAutoClean` – minimal component that stamps `data-datocms-auto-clean` and wires the hook for you.
+- `useDatoVisualEditingListen(subscribe, options)` – keeps overlays in sync with Dato “Listen” subscriptions (streaming / SSE preview updates).
+- `DatoVisualEditingDevPanel` – React counterpart of the dev panel for JSX-based preview shells.
 
 ### Low-level utilities
 

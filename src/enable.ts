@@ -2,7 +2,23 @@ import { markDOMFromStega } from './stega/markFromStega.js';
 import { clearGeneratedAttributes } from './dom/stamp.js';
 import { annotateExplicitTargetsForDebug } from './dom/annotateDebug.js';
 import { setupOverlay } from './overlay/index.js';
-import type { EnableDatoVisualEditingOptions, VisualEditingController } from './types.js';
+import { setupDevPanel } from './debug/devPanel.js';
+import { checkStegaState } from './utils/state.js';
+import {
+  EVENT_READY,
+  EVENT_MARKED,
+  EVENT_STATE,
+  EVENT_WARN
+} from './constants.js';
+import type {
+  EnableDatoVisualEditingOptions,
+  VisualEditingController,
+  VisualEditingEvents,
+  DevPanelOption,
+  MarkSummary,
+  VisualEditingState,
+  VisualEditingWarning
+} from './types.js';
 
 type MarkContext = {
   baseEditingUrl: string;
@@ -33,11 +49,17 @@ class VisualEditingControllerImpl implements VisualEditingController {
   private readonly doc: Document;
   private readonly pending = new Set<ParentNode>();
   private readonly scheduleMark: () => void;
+  private readonly callbacks: VisualEditingEvents;
+  private readonly isDev: boolean;
+  private readonly devPanelOption: DevPanelOption | undefined;
 
   private observer: MutationObserver | null = null;
   private disposeOverlay: (() => void) | null = null;
+  private disposeDevPanel: (() => void) | null = null;
   private enabled = false;
   private disposed = false;
+  private readyEmitted = false;
+  private warnedNoEditables = false;
 
   constructor(options: EnableDatoVisualEditingOptions) {
     const baseEditingUrl = normalizeBaseUrl(options.baseEditingUrl);
@@ -55,6 +77,17 @@ class VisualEditingControllerImpl implements VisualEditingController {
       debug: options.debug ?? false
     };
     this.scheduleMark = createScheduler(() => this.runMark());
+    this.callbacks = {
+      onReady: options.onReady,
+      onMarked: options.onMarked,
+      onStateChange: options.onStateChange,
+      onWarning: options.onWarning
+    };
+    this.devPanelOption = options.devPanel;
+    this.isDev =
+      typeof process !== 'undefined' && process?.env?.NODE_ENV
+        ? process.env.NODE_ENV !== 'production'
+        : true;
   }
 
   enable(): void {
@@ -63,6 +96,7 @@ class VisualEditingControllerImpl implements VisualEditingController {
     }
     this.enabled = true;
     this.attach();
+    this.emitState();
     this.runMark();
   }
 
@@ -73,6 +107,7 @@ class VisualEditingControllerImpl implements VisualEditingController {
     this.enabled = false;
     this.detach();
     this.pending.clear();
+    this.emitState();
   }
 
   toggle(): void {
@@ -94,6 +129,7 @@ class VisualEditingControllerImpl implements VisualEditingController {
     clearGeneratedAttributes(this.root);
     this.pending.clear();
     this.disposed = true;
+    this.emitState();
   }
 
   isEnabled(): boolean {
@@ -102,6 +138,14 @@ class VisualEditingControllerImpl implements VisualEditingController {
 
   isDisposed(): boolean {
     return this.disposed;
+  }
+
+  refresh(root?: ParentNode): void {
+    if (this.disposed || !this.enabled) {
+      return;
+    }
+    this.pending.add(root ?? this.root);
+    this.scheduleMark();
   }
 
   private attach(): void {
@@ -117,6 +161,16 @@ class VisualEditingControllerImpl implements VisualEditingController {
       attributeFilter: ['alt']
     });
     this.disposeOverlay = setupOverlay(this.doc);
+    if (this.shouldShowDevPanel() && !this.disposeDevPanel) {
+      const panelOptions =
+        typeof this.devPanelOption === 'object' && this.devPanelOption ? this.devPanelOption : undefined;
+      this.disposeDevPanel = setupDevPanel(
+        this.doc,
+        () => ({ enabled: this.enabled, disposed: this.disposed }),
+        (root?: ParentNode) => checkStegaState(root ?? this.root),
+        panelOptions
+      );
+    }
   }
 
   private detach(): void {
@@ -128,10 +182,19 @@ class VisualEditingControllerImpl implements VisualEditingController {
       this.disposeOverlay();
       this.disposeOverlay = null;
     }
+    if (this.disposeDevPanel) {
+      this.disposeDevPanel();
+      this.disposeDevPanel = null;
+    }
+  }
+
+  private shouldShowDevPanel(): boolean {
+    return Boolean(this.devPanelOption) && this.isDev;
   }
 
   private handleMutations(mutations: MutationRecord[]): void {
     if (!this.enabled || this.disposed) {
+      this.pending.clear();
       return;
     }
 
@@ -155,10 +218,7 @@ class VisualEditingControllerImpl implements VisualEditingController {
       if (mutation.type === 'childList') {
         this.pending.add(mutation.target as ParentNode);
         mutation.addedNodes.forEach((node) => {
-          if (
-            node.nodeType === Node.ELEMENT_NODE ||
-            node.nodeType === Node.DOCUMENT_FRAGMENT_NODE
-          ) {
+          if (node.nodeType === Node.ELEMENT_NODE || node.nodeType === Node.DOCUMENT_FRAGMENT_NODE) {
             this.pending.add(node as ParentNode);
           }
         });
@@ -176,22 +236,104 @@ class VisualEditingControllerImpl implements VisualEditingController {
       return;
     }
 
-    if (this.pending.size === 0) {
-      markDOMFromStega(this.context);
+    const contexts =
+      this.pending.size === 0
+        ? [this.context]
+        : Array.from(this.pending).map((subtree) => ({ ...this.context, root: subtree }));
+    this.pending.clear();
+
+    const summaries: MarkSummary[] = [];
+
+    for (const ctx of contexts) {
+      const summary = markDOMFromStega(ctx);
+      summaries.push(summary);
       if (this.context.debug) {
-        annotateExplicitTargetsForDebug(this.context);
+        annotateExplicitTargetsForDebug(ctx);
       }
+    }
+
+    if (summaries.length === 0) {
       return;
     }
 
-    for (const subtree of this.pending) {
-      const subContext = { ...this.context, root: subtree };
-      markDOMFromStega(subContext);
-      if (this.context.debug) {
-        annotateExplicitTargetsForDebug(subContext);
+    let combined: MarkSummary;
+    if (summaries.length === 1) {
+      combined = summaries[0];
+    } else {
+      const state = checkStegaState(this.root);
+      combined = {
+        editableTotal: state.editableTotal,
+        explicitTotal: state.explicitTotal,
+        generatedStamped: summaries.reduce((acc, item) => acc + item.generatedStamped, 0),
+        generatedUpdated: summaries.reduce((acc, item) => acc + item.generatedUpdated, 0),
+        scope: this.root
+      };
+    }
+
+    this.handleMarkResult(combined);
+  }
+
+  private handleMarkResult(summary: MarkSummary): void {
+    this.emit(EVENT_MARKED, this.callbacks.onMarked, summary);
+
+    if (!this.readyEmitted) {
+      this.readyEmitted = true;
+      this.emit(EVENT_READY, this.callbacks.onReady, summary);
+    }
+
+    if (
+      this.isDev &&
+      !this.warnedNoEditables &&
+      summary.scope === this.root &&
+      summary.editableTotal === 0
+    ) {
+      this.warnedNoEditables = true;
+      const message =
+        '[datocms-visual-editing] no editable elements were detected after enable().\n' +
+        'if you’re hydrating/streaming, do not replace the server-rendered nodes that carry _editingUrl/stega markers.\n' +
+        'reuse the exact DOM and render into it.';
+      console.warn(message);
+      const warning: VisualEditingWarning = {
+        code: 'no-editables',
+        message
+      };
+      this.emit(EVENT_WARN, this.callbacks.onWarning, warning);
+    }
+  }
+
+  private emitState(): void {
+    const state: VisualEditingState = {
+      enabled: this.enabled,
+      disposed: this.disposed
+    };
+    this.emit(EVENT_STATE, this.callbacks.onStateChange, state);
+  }
+
+  private emit<T>(
+    type: string,
+    callback: ((payload: T) => void) | undefined,
+    payload: T
+  ): void {
+    try {
+      callback?.(payload);
+    } catch (error) {
+      if (this.isDev) {
+        console.error('[datocms-visual-editing] listener for', type, 'threw', error);
       }
     }
-    this.pending.clear();
+
+    const CustomEventCtor =
+      this.doc.defaultView?.CustomEvent ?? (typeof CustomEvent !== 'undefined' ? CustomEvent : undefined);
+    if (!CustomEventCtor) {
+      return;
+    }
+
+    try {
+      const event = new CustomEventCtor(type, { detail: payload });
+      this.doc.dispatchEvent(event);
+    } catch {
+      // Ignore dispatch failures (e.g. CustomEvent polyfill not available)
+    }
   }
 }
 
@@ -227,6 +369,9 @@ function createNoopController(autoEnable: boolean): VisualEditingController {
     },
     isDisposed() {
       return disposed;
+    },
+    refresh() {
+      // no-op on the server
     }
   };
 }
