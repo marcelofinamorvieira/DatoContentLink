@@ -14,6 +14,7 @@ export function useDatoAutoClean<T extends Element>(
   const delayMs = options?.delayMs;
   const observe = options?.observe;
   const cleanImageAlts = options?.cleanImageAlts;
+  const observeImageAlts = options?.observeImageAlts;
   const skipSelectors = options?.skipSelectors;
   const skipKey = skipSelectors?.length ? skipSelectors.join('|') : '';
 
@@ -26,7 +27,8 @@ export function useDatoAutoClean<T extends Element>(
       delayMs,
       observe,
       cleanImageAlts,
+      observeImageAlts,
       skipSelectors
     });
-  }, [ref, delayMs, observe, cleanImageAlts, skipKey]);
+  }, [ref, delayMs, observe, cleanImageAlts, observeImageAlts, skipKey]);
 }

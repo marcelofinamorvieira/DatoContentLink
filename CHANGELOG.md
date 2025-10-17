@@ -3,6 +3,9 @@
 All notable changes to this project will be documented in this file.
 
 ## Unreleased
+- Add image-alt helpers (`stripDatoImageAlt`, `decodeDatoImageAlt`, `withDatoImageAlt`) for render pipelines that skip DOM auto-cleaning.
+- Extend `autoCleanStegaWithin` options with `observeImageAlts` so integrators can control `alt`-attribute observation separately from cleaning.
+- Document image-alt workflows, add Next.js helper example, and cover the new utilities with tests.
 - Refactor `enableDatoVisualEditing` to return a controller with `enable`, `disable`, `toggle`, `dispose`, and state helpers (`isEnabled`, `isDisposed`).
 - Add `autoEnable` option for manual control flows and expose toggle-ready examples in plain JS and Next.js demos.
 - Update tests and documentation to cover overlay toggling and controller lifecycle semantics.

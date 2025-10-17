@@ -17,6 +17,12 @@ export {
 } from './utils/tags.js';
 export type { EditTagInfo, EditTagFormat } from './utils/tags.js';
 export {
+  stripDatoImageAlt,
+  decodeDatoImageAlt,
+  withDatoImageAlt
+} from './utils/imageAlt.js';
+export type { WithDatoImageAltResult } from './utils/imageAlt.js';
+export {
   AUTO_CLEAN_ATTR,
   DATA_ATTR_EDIT_INFO,
   DATA_ATTR_ITEM_ID,

@@ -5,12 +5,14 @@ export type AutoCleanOptions = {
   delayMs?: number;
   observe?: boolean;
   cleanImageAlts?: boolean;
+  observeImageAlts?: boolean;
   skipSelectors?: string[];
 };
 
 const DEFAULT_DELAY_MS = 32;
 const DEFAULT_OBSERVE = false;
 const DEFAULT_CLEAN_IMAGE_ALTS = true;
+const DEFAULT_OBSERVE_IMAGE_ALTS = true;
 const DEFAULT_SKIP_SELECTORS = ['[contenteditable="true"]'] as const;
 
 const NOOP = () => {
@@ -22,6 +24,7 @@ function resolveOptions(raw?: AutoCleanOptions): Required<AutoCleanOptions> {
     delayMs: raw?.delayMs ?? DEFAULT_DELAY_MS,
     observe: raw?.observe ?? DEFAULT_OBSERVE,
     cleanImageAlts: raw?.cleanImageAlts ?? DEFAULT_CLEAN_IMAGE_ALTS,
+    observeImageAlts: raw?.observeImageAlts ?? DEFAULT_OBSERVE_IMAGE_ALTS,
     skipSelectors: raw?.skipSelectors ? [...raw.skipSelectors] : [...DEFAULT_SKIP_SELECTORS]
   };
 }
@@ -62,7 +65,11 @@ export function autoCleanStegaWithin(root: Element, raw?: AutoCleanOptions): () 
           schedule();
           break;
         }
-        if (mutation.type === 'attributes' && mutation.attributeName === 'alt') {
+        if (
+          opts.observeImageAlts &&
+          mutation.type === 'attributes' &&
+          mutation.attributeName === 'alt'
+        ) {
           schedule();
           break;
         }
@@ -73,8 +80,8 @@ export function autoCleanStegaWithin(root: Element, raw?: AutoCleanOptions): () 
       subtree: true,
       childList: true,
       characterData: true,
-      attributes: opts.cleanImageAlts,
-      attributeFilter: opts.cleanImageAlts ? ['alt'] : undefined
+      attributes: opts.observeImageAlts,
+      attributeFilter: opts.observeImageAlts ? ['alt'] : undefined
     });
   }
 
