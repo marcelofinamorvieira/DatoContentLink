@@ -1,3 +1,8 @@
+/**
+ * Walk the DOM, decode stega payloads, and stamp the attributes consumed by
+ * the overlay. This module purposely contains no DOM mutation beyond stamping
+ * edit URLs so the rest of the runtime can stay predictable.
+ */
 import {
   ATTR_EDIT_TARGET,
   ATTR_EDIT_URL,
@@ -13,13 +18,19 @@ import { fromDecoded, safeStringify } from '../utils/debug.js';
 import { splitStega } from './split.js';
 import type { MarkSummary } from '../types.js';
 
+// Narrow view of the controller's state that the marker requires.
 type MarkContext = {
   baseEditingUrl: string;
   environment?: string;
   root: ParentNode;
   debug?: boolean;
+  resolveEditUrl: (info: DecodedInfo) => string | null;
 };
 
+/**
+ * Traverse `ctx.root`, stamp clickable overlays for any stega payloads found,
+ * and return bookkeeping information that the controller can aggregate.
+ */
 export function markDOMFromStega(ctx: MarkContext): MarkSummary {
   const docCtor = typeof Document !== 'undefined' ? Document : undefined;
   const globalDoc = typeof document !== 'undefined' ? document : undefined;
@@ -36,6 +47,7 @@ export function markDOMFromStega(ctx: MarkContext): MarkSummary {
     };
   }
 
+  // First pass: collect text nodes that actually contain encoded payloads.
   const walker = doc.createTreeWalker(ctx.root, NodeFilter.SHOW_TEXT);
 
   const textNodes: Text[] = [];
@@ -109,6 +121,7 @@ export function markDOMFromStega(ctx: MarkContext): MarkSummary {
     }
   }
 
+  // Second pass: inspect image alts, since they are not part of the text walker.
   const scope = ctx.root as ParentNode & {
     querySelectorAll: typeof document.querySelectorAll;
   };
@@ -160,6 +173,7 @@ export function markDOMFromStega(ctx: MarkContext): MarkSummary {
     }
   });
 
+  // Keep elements clickable by marking them editable and summarise the sweep.
   const all = Array.from(scope.querySelectorAll<HTMLElement>(`[${ATTR_EDIT_URL}]`));
   all.forEach((el) => {
     el.setAttribute(ATTR_EDITABLE, '');
@@ -176,11 +190,13 @@ export function markDOMFromStega(ctx: MarkContext): MarkSummary {
   return summary;
 }
 
+// If the site provided a wrapper via data-datocms-edit-target we stamp that instead.
 function resolveTarget(start: Element): Element {
   const wrapper = start.closest<HTMLElement>(`[${ATTR_EDIT_TARGET}]`);
   return wrapper ?? start;
 }
 
+// Invisible images often live inside wrappers that have layout; prefer those.
 function preferWrapperIfZeroSize(img: HTMLImageElement): Element | null {
   if (typeof img.getBoundingClientRect !== 'function') {
     return null;
@@ -195,22 +211,38 @@ function preferWrapperIfZeroSize(img: HTMLImageElement): Element | null {
   return null;
 }
 
+/**
+ * Shrink the decoded payload down to the data we want to stamp on the element.
+ * Today that's only the resolved edit URL; everything else is for tooling.
+ */
 function toEditInfo(decoded: DecodedInfo, ctx: MarkContext): EditInfo | null {
-  let editUrl: string;
-  try {
-    editUrl = buildDatoDeepLink(decoded, ctx.baseEditingUrl, ctx.environment);
-  } catch {
+  const editUrl = ctx.resolveEditUrl(decoded);
+  if (!editUrl) {
     return null;
   }
 
-  const environment = ctx.environment ?? (decoded.environment ?? undefined);
-  const locale = decoded.locale ?? undefined;
-
   return {
-    editUrl,
-    itemId: decoded.itemId || undefined,
-    itemTypeId: decoded.itemTypeId,
-    environment: environment ?? undefined,
-    locale
+    editUrl
   };
+}
+
+/**
+ * Default strategy for deriving the overlay URL. We prefer the payload's
+ * explicit `editUrl`, falling back to a generated deep link when necessary.
+ */
+export function defaultResolveEditUrl(
+  decoded: DecodedInfo,
+  baseEditingUrl: string,
+  environment?: string
+): string | null {
+  const trimmed = decoded.editUrl?.trim();
+  if (trimmed) {
+    return trimmed;
+  }
+
+  try {
+    return buildDatoDeepLink(decoded, baseEditingUrl, environment);
+  } catch {
+    return null;
+  }
 }

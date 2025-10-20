@@ -7,7 +7,7 @@ interactions that deep-link straight to the right record + field inside the edit
 
 - **DOM is the source of truth.** There is no in-memory cache, no persisted map. Attributes carry all metadata.
 - **Zero-width markers are scrubbed.** As soon as we stamp the attributes, the invisible characters disappear.
-- **Overlays resolve from attributes only.** Pointer/focus events look up the nearest `data-datocms-edit-url` – nothing else.
+- **Edit URLs come straight from stega.** Pointer/focus events look up the nearest `data-datocms-edit-url` and open it as-is – no hidden rewriting.
 
 ```bash
 npm install datocms-visual-editing
@@ -41,7 +41,7 @@ npm install datocms-visual-editing
 
    const visualEditing = enableDatoVisualEditing({
      baseEditingUrl: 'https://acme.admin.datocms.com',
-     environment: 'main'      // optional – attaches to every stamped element
+     environment: 'main'      // optional – available to custom resolveEditUrl handlers
    });
 
    // Optional toggle button:
@@ -55,6 +55,8 @@ npm install datocms-visual-editing
 That’s it. On activation we scan the DOM, decode stega payloads, stamp attributes, scrub markers,
 and start a single `MutationObserver` to keep new nodes in sync. Overlays are live immediately.
 
+> Need custom overlay links? Pass a `resolveEditUrl` function when calling `enableDatoVisualEditing`. It receives the decoded stega payload and can return any URL (or `null` to skip stamping individual nodes).
+
 ---
 
 ### Streaming & rehydration
@@ -65,21 +67,21 @@ When streaming preview responses (React Server Components, Remix responses, or S
 
 ## Attribute contract
 
-Every editable target receives the following attributes (if the data exists):
+By default the runtime keeps things simple:
 
 | Attribute | Purpose |
 | --- | --- |
-| `data-datocms-edit-url` | Fully-qualified deep link to the record and field in the DatoCMS editor. |
+| `data-datocms-edit-url` | The exact edit URL decoded from stega (or supplied by your `resolveEditUrl` hook). |
 | `data-datocms-editable` | Convenience flag stamped on every editable target (explicit or generated). |
-| `data-datocms-item-id` | Record ID (diagnostics) |
-| `data-datocms-item-type-id` | Model API key/ID (diagnostics) |
-| `data-datocms-environment` | Environment slug when provided |
-| `data-datocms-locale` | Locale code extracted from stega payload |
-| `data-datocms-generated="stega"` | Guard flag – we only remove the attributes that we stamped |
+| `data-datocms-generated="stega"` | Guard flag – we only remove the attributes that we stamped. |
 
-You can still author attributes manually (for example in static markup). We never overwrite developer-authored
-values because they lack the guard flag. During dispose we only clean elements that carry
-`data-datocms-generated="stega"`.
+Additional metadata (item ID, model, locale, environment, full decoded payload) is still available, but now opt-in:
+
+- Set `debug: true` when enabling the runtime to add the usual `data-datocms-debug-*` attributes for inspection.
+- Use `buildEditTagAttributes(info, 'json' | 'attrs')` if you want to stamp richer attributes manually on the server.
+- Call `getDatoEditInfo(element)` or `decodeStega(string)` to retrieve the full `DecodedInfo` structure programmatically.
+
+You can still author attributes manually (for example in static markup). We never overwrite developer-authored values because they lack the guard flag. During dispose we only clean elements that carry `data-datocms-generated="stega"`.
 
 ### Layout helpers
 
@@ -129,6 +131,7 @@ type EnableDatoVisualEditingOptions = {
   devPanel?: boolean | {    // show a floating dev counter panel in dev builds
     position?: 'br' | 'bl' | 'tr' | 'tl';
   };
+  resolveEditUrl?: (info: DecodedInfo, ctx: { baseEditingUrl: string; environment?: string }) => string | null;
   onReady?: (summary: MarkSummary) => void;
   onMarked?: (summary: MarkSummary) => void;
   onStateChange?: (state: { enabled: boolean; disposed: boolean }) => void;
@@ -144,6 +147,8 @@ Returns a controller with the following methods:
 - `refresh(root?)` – queue a stega rescan for the whole root or a specific subtree (handy after streaming updates).
 
 > **SPA note:** call `dispose()` on route changes if you mount/unmount the preview surface manually. After disposal the controller becomes inert.
+
+Provide a `resolveEditUrl` callback when you want to rewrite or filter linking behaviour on a per-node basis (for example, to send certain payloads to custom dashboards). Return `null` from the callback to skip stamping a given element entirely.
 
 Lifecycle callbacks receive a `MarkSummary` object (`editableTotal`, `generatedStamped`, `generatedUpdated`, `explicitTotal`, and the processed `scope`). The same payload is dispatched as DOM `CustomEvent`s:
 
@@ -170,6 +175,7 @@ These attributes make it easy to inspect the resolved editing info directly in D
 - Set `devPanel: true` (or `{ position: 'tr' | 'tl' | 'br' | 'bl' }`) to spawn a lightweight overlay with live counters while developing.
 - Use `checkStegaState(root?)` to get programmatic insight into editable totals, generated vs. explicit counts, info-only attributes, and leftover encoded markers.
 - Drop the `DatoVisualEditingDevPanel` React component anywhere inside your preview shell to render the same diagnostics using JSX.
+- Need to audit raw payloads? Check `examples/payload-inspection/` for ready-to-run Node scripts that log the decoded stega metadata for uploads and hero sections.
 
 ### `withContentLinkHeaders(fetchLike)`
 
@@ -193,7 +199,7 @@ mutations when you intend to handle them yourself.
 
 - `decodeStega(string)` / `stripStega(string)` – stega helpers re-exported for convenience.
 - `stripDatoImageAlt(alt)` / `decodeDatoImageAlt(alt)` / `withDatoImageAlt(alt)` – image-specific helpers for render pipelines that do not pass through the DOM auto-cleaner.
-- `buildEditTagAttributes(info, format)` – build explicit attributes if you want to hand-stamp elements server-side.
+- `buildEditTagAttributes(info, format)` – build explicit attributes if you want to hand-stamp elements server-side. Defaults to the URL-only format; pass `'json'` or `'attrs'` to include metadata payloads.
 - `getDatoEditInfo(element)` – read explicit attributes or JSON payloads from markup you crafted yourself.
 
 All attribute names are exported from `datocms-visual-editing/constants` as `ATTR_*` constants.

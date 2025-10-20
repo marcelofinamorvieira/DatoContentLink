@@ -1,3 +1,9 @@
+/**
+ * Shared TypeScript types exported alongside the runtime entry points. Keeping
+ * them in one place helps consumers understand the public surface area.
+ */
+import type { DecodedInfo } from './decode/types.js';
+
 export type MarkSummary = {
   /** Total editable targets (explicit + generated) within the processed scope. */
   editableTotal: number;
@@ -52,6 +58,12 @@ export type EnableDatoVisualEditingOptions = {
    * Render a floating development panel with live counters (development only).
    */
   devPanel?: DevPanelOption;
+  /**
+   * Customize how the clickable overlay URL is resolved.
+   * Receives the decoded stega payload and should return the URL to open.
+   * Return null to skip stamping for that payload.
+   */
+  resolveEditUrl?: (info: DecodedInfo, context: { baseEditingUrl: string; environment?: string }) => string | null;
 } & VisualEditingEvents;
 
 export type VisualEditingController = {

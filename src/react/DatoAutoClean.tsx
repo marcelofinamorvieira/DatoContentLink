@@ -1,3 +1,4 @@
+/** React component that declaratively wraps `autoCleanStegaWithin`. */
 import {
   createElement,
   useRef,
@@ -20,6 +21,7 @@ type DatoAutoCleanProps<E extends ElementTag = 'span'> = {
   children?: ReactNode;
 } & Omit<ComponentPropsWithoutRef<E>, 'ref'>;
 
+/** Render children while automatically stripping stega metadata inside. */
 export function DatoAutoClean<E extends ElementTag = 'span'>(
   props: DatoAutoCleanProps<E>
 ): JSX.Element {

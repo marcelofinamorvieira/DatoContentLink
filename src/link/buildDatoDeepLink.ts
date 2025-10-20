@@ -1,3 +1,8 @@
+/**
+ * Builds canonical DatoCMS editor URLs from decoded stega payloads. While the
+ * runtime now prefers the upstream `editUrl`, this helper remains valuable for
+ * env-specific overrides and for consumers that want to recreate deep links.
+ */
 import { DecodedInfo } from '../decode/types.js';
 import {
   extractFieldPathFromUrl,
@@ -6,10 +11,12 @@ import {
   withLocaleFieldPath
 } from './fieldPath.js';
 
+// Avoid double slashes when concatenating segments.
 function stripTrailingSlash(url: string): string {
   return url.endsWith('/') ? url.slice(0, -1) : url;
 }
 
+// Only treat the payload URL as authoritative when it belongs to the same project.
 function sameOrigin(url: string, base: string): boolean {
   try {
     const target = new URL(url);
@@ -27,6 +34,11 @@ function encodeEnv(env?: string | null): string | null {
   return encodeURIComponent(env);
 }
 
+/**
+ * Create a deep link into the DatoCMS editor. Prefers the payload's own
+ * `editUrl` when it already matches the configured origin; otherwise we
+ * reconstruct a URL using the supplied identifiers.
+ */
 export function buildDatoDeepLink(info: DecodedInfo, baseEditingUrl: string, environment?: string): string {
   if (!baseEditingUrl) {
     throw new Error('baseEditingUrl is required');

@@ -1,3 +1,8 @@
+/**
+ * Helpers for generating or applying explicit edit tags on server-rendered
+ * markup. While the runtime now stamps minimal attributes, these utilities
+ * remain valuable for projects that annotate HTML ahead of time.
+ */
 import {
   extractFieldPathFromUrl,
   mergeFieldPathIntoUrl,
@@ -24,11 +29,16 @@ export type EditTagInfo = {
   _editingUrl?: string;
 };
 
-export type EditTagFormat = 'json' | 'attrs';
+export type EditTagFormat = 'url' | 'json' | 'attrs';
 
+/**
+ * Create the attributes that should be stamped on an element to expose edit
+ * metadata. Defaults to the simplified URL-only format but still supports
+ * richer JSON/attribute variants for tooling.
+ */
 export function buildEditTagAttributes(
   info: EditTagInfo,
-  format: EditTagFormat = 'json'
+  format: EditTagFormat = 'url'
 ): Record<string, string> {
   const cleanedItemId = cleanString(info.itemId);
   const cleanedItemTypeId = cleanString(info.itemTypeId);
@@ -51,6 +61,15 @@ export function buildEditTagAttributes(
 
   if (!cleanedItemId && !editUrlWithFieldPath) {
     return {};
+  }
+
+  if (format === 'url') {
+    if (!editUrlWithFieldPath) {
+      return {};
+    }
+    return {
+      [DATA_ATTR_EDIT_URL]: editUrlWithFieldPath
+    };
   }
 
   if (format === 'attrs') {
@@ -98,10 +117,14 @@ export function buildEditTagAttributes(
   };
 }
 
+/**
+ * Helper that removes previous explicit attributes and applies the new set.
+ * Keeps attribute churn minimal so the DOM stays predictable.
+ */
 export function applyEditTagAttributes(
   element: Element,
   info: EditTagInfo,
-  format: EditTagFormat = 'json'
+  format: EditTagFormat = 'url'
 ): void {
   for (const name of EXPLICIT_ATTRIBUTE_NAMES) {
     element.removeAttribute(name);
@@ -113,6 +136,7 @@ export function applyEditTagAttributes(
   }
 }
 
+// Normalize optional strings by trimming and discarding empty values.
 function cleanString(value: string | undefined): string | undefined {
   if (value == null) {
     return undefined;

@@ -1,3 +1,4 @@
+/** React dev panel that visualizes stega/overlay state in real time. */
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import type { JSX } from 'react';
 import { EVENT_MARKED, EVENT_STATE } from '../constants.js';
@@ -37,6 +38,10 @@ const labelStyle: CSSProperties = {
   fontWeight: 600
 };
 
+/**
+ * Floating debug panel showing overlay status, current counters, and samples.
+ * Useful during integration but omitted automatically in production builds.
+ */
 export function DatoVisualEditingDevPanel(
   props: DatoVisualEditingDevPanelProps
 ): JSX.Element | null {
@@ -143,6 +148,7 @@ export function DatoVisualEditingDevPanel(
   );
 }
 
+// Translate a shorthand position into fixed offsets.
 function getPositionStyle(position: DevPanelPosition): CSSProperties {
   const style: CSSProperties = {
     top: undefined,
@@ -172,6 +178,7 @@ function getPositionStyle(position: DevPanelPosition): CSSProperties {
   return style;
 }
 
+// Provide a human-readable description of the scope node in debug output.
 function describeScope(scope: ParentNode): string {
   if (!(scope instanceof Element)) {
     return 'document';

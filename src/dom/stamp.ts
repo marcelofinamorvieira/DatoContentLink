@@ -1,3 +1,8 @@
+/**
+ * Low-level DOM mutation helpers used when stamping or cleaning up editable
+ * markers. The logic stays here so both stega and explicit workflows share
+ * the exact same attribute semantics.
+ */
 import {
   ATTR_EDIT_URL,
   ATTR_ITEM_ID,
@@ -15,6 +20,10 @@ import {
   DEBUG_ATTRS
 } from '../constants.js';
 
+/**
+ * Minimal payload required to stamp an element as editable. Today we only keep
+ * the edit URL, but the structure is future-proof if we re-introduce metadata.
+ */
 export type EditInfo = {
   editUrl: string;
   itemId?: string;
@@ -25,6 +34,10 @@ export type EditInfo = {
 
 const warnedCollisionElements = new WeakSet<Element>();
 
+/**
+ * Write edit markers to the target element, returning true when any attribute
+ * changed (useful for analytics or follow-up debug work).
+ */
 export function stampAttributes(el: Element, info: EditInfo): boolean {
   if (el.hasAttribute(ATTR_EDIT_URL) && el.getAttribute(ATTR_GENERATED) !== GENERATED_VALUE) {
     return false;
@@ -41,24 +54,19 @@ export function stampAttributes(el: Element, info: EditInfo): boolean {
     [ATTR_EDIT_URL]: info.editUrl
   };
 
-  if (info.itemId) {
-    next[ATTR_ITEM_ID] = info.itemId;
-  }
-  if (info.itemTypeId) {
-    next[ATTR_ITEM_TYPE_ID] = info.itemTypeId;
-  }
-  if (info.environment) {
-    next[ATTR_ENV] = info.environment;
-  }
-  if (info.locale) {
-    next[ATTR_LOCALE] = info.locale;
-  }
-
   let changed = false;
 
   for (const [key, value] of Object.entries(next)) {
     if (el.getAttribute(key) !== value) {
       el.setAttribute(key, value);
+      changed = true;
+    }
+  }
+
+  const removableAttrs = [ATTR_ITEM_ID, ATTR_ITEM_TYPE_ID, ATTR_ENV, ATTR_LOCALE];
+  for (const attr of removableAttrs) {
+    if (!(attr in next) && el.hasAttribute(attr)) {
+      el.removeAttribute(attr);
       changed = true;
     }
   }
@@ -76,6 +84,10 @@ export function stampAttributes(el: Element, info: EditInfo): boolean {
   return changed || generatedStamped;
 }
 
+/**
+ * Enrich the target element with debug metadata so the dev panel / inspectors
+ * can surface details without re-running the decoder.
+ */
 export function stampDebugAttributes(
   el: Element,
   payload: { reason: string; url: string; infoJson: string }
@@ -86,6 +98,10 @@ export function stampDebugAttributes(
   el.setAttribute(ATTR_DEBUG_INFO, payload.infoJson);
 }
 
+/**
+ * Remove all generated markers and debug payloads inside `root`. Used when
+ * disabling the controller or running in environments where overlays are off.
+ */
 export function clearGeneratedAttributes(root: ParentNode): void {
   const debugNodes = root.querySelectorAll<HTMLElement>(
     `[${ATTR_DEBUG}], [${ATTR_DEBUG_INFO}], [${ATTR_DEBUG_REASON}], [${ATTR_DEBUG_URL}]`
@@ -106,6 +122,7 @@ export function clearGeneratedAttributes(root: ParentNode): void {
   });
 }
 
+// Log (once) when two stega payloads map to the same element, which would break deep linking.
 function warnCollision(el: Element, originalUrl: string, nextUrl: string): void {
   if (warnedCollisionElements.has(el)) {
     return;

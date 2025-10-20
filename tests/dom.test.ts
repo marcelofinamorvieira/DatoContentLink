@@ -85,9 +85,9 @@ describe('enableDatoVisualEditing', () => {
     expect(heroText.getAttribute(ATTR_EDIT_URL)).toBe(
       'https://acme.admin.datocms.com/environments/main/editor/item_types/article/items/hero123/edit#fieldPath=hero.title.en'
     );
-    expect(heroText.getAttribute(ATTR_ITEM_ID)).toBe('hero123');
-    expect(heroText.getAttribute(ATTR_ENV)).toBe('main');
-    expect(heroText.getAttribute(ATTR_LOCALE)).toBe('en');
+    expect(heroText.hasAttribute(ATTR_ITEM_ID)).toBe(false);
+    expect(heroText.hasAttribute(ATTR_ENV)).toBe(false);
+    expect(heroText.hasAttribute(ATTR_LOCALE)).toBe(false);
     expect(heroText.getAttribute(ATTR_GENERATED)).toBe('stega');
     expect(heroText.textContent).toBe('Hero headline');
 
@@ -96,6 +96,7 @@ describe('enableDatoVisualEditing', () => {
     expect(imageWrapper.getAttribute(ATTR_EDIT_URL)).toBe(
       'https://acme.admin.datocms.com/environments/main/editor/item_types/article/items/hero123/edit#fieldPath=hero.image'
     );
+    expect(imageWrapper?.hasAttribute(ATTR_ITEM_ID)).toBe(false);
     expect(heroImage.getAttribute('alt')).toBe('Hero image alt');
 
     controller.dispose();
@@ -103,6 +104,32 @@ describe('enableDatoVisualEditing', () => {
     expect(heroText.hasAttribute(ATTR_EDIT_URL)).toBe(false);
     expect(heroText.hasAttribute(ATTR_GENERATED)).toBe(false);
     expect(imageWrapper?.hasAttribute(ATTR_EDIT_URL)).toBe(false);
+  });
+
+  it('falls back to raw href when image payload omits itemId', () => {
+    const payload = {
+      cms: 'datocms',
+      href: 'https://images.datocms-assets.com/fake/path/banner.png'
+    };
+
+    const encodedAlt = vercelStegaCombine('Hero banner', payload);
+
+    document.body.innerHTML = `<img id="hero-banner" alt="${encodedAlt}" src="hero.jpg">`;
+
+    const controller = enableDatoVisualEditing({
+      baseEditingUrl: 'https://acme.admin.datocms.com',
+      environment: 'main'
+    });
+
+    const heroBanner = document.getElementById('hero-banner') as HTMLImageElement;
+    expect(heroBanner).not.toBeNull();
+
+    expect(heroBanner?.getAttribute(ATTR_EDIT_URL)).toBe(payload.href);
+    expect(heroBanner?.hasAttribute(ATTR_ITEM_ID)).toBe(false);
+    expect(heroBanner?.hasAttribute(ATTR_ENV)).toBe(false);
+    expect(heroBanner?.hasAttribute(ATTR_LOCALE)).toBe(false);
+
+    controller.dispose();
   });
 
   it('keeps overlay strictly attribute-based', () => {
@@ -151,6 +178,38 @@ describe('enableDatoVisualEditing', () => {
       'noopener,noreferrer'
     );
     expect(decodeSpy).not.toHaveBeenCalled();
+
+    controller.dispose();
+  });
+
+  it('supports custom edit url resolvers', () => {
+    const payload = {
+      cms: 'datocms',
+      itemId: 'story-custom',
+      fieldPath: 'headline',
+      editUrl: 'https://acme.admin.datocms.com/editor/items/story-custom/edit'
+    };
+    const encoded = vercelStegaCombine('Story headline', payload);
+
+    document.body.innerHTML = `<h2 id="headline">${encoded}</h2>`;
+
+    const resolver = vi.fn((info: any, ctx: { baseEditingUrl: string; environment?: string }) => {
+      expect(ctx.baseEditingUrl).toBe('https://acme.admin.datocms.com');
+      expect(ctx.environment).toBe('preview');
+      return info.editUrl ? `${info.editUrl}?from=custom` : null;
+    });
+
+    const controller = enableDatoVisualEditing({
+      baseEditingUrl: 'https://acme.admin.datocms.com',
+      environment: 'preview',
+      resolveEditUrl: resolver
+    });
+
+    const element = document.getElementById('headline') as HTMLElement;
+    expect(element.getAttribute(ATTR_EDIT_URL)).toBe(
+      'https://acme.admin.datocms.com/editor/items/story-custom/edit?from=custom'
+    );
+    expect(resolver).toHaveBeenCalledTimes(1);
 
     controller.dispose();
   });
@@ -336,18 +395,24 @@ describe('enableDatoVisualEditing', () => {
     });
 
     const heading = document.getElementById('headline') as HTMLElement;
-    expect(heading.getAttribute(ATTR_ITEM_ID)).toBe('item-1');
+    expect(heading.getAttribute(ATTR_EDIT_URL)).toBe(
+      'https://acme.admin.datocms.com/editor/items/item-1/edit#fieldPath=content.title'
+    );
     expect(heading.textContent).toBe('Primary title');
 
     controller.disable();
 
     heading.textContent = secondEncoded;
-    expect(heading.getAttribute(ATTR_ITEM_ID)).toBe('item-1');
+    expect(heading.getAttribute(ATTR_EDIT_URL)).toBe(
+      'https://acme.admin.datocms.com/editor/items/item-1/edit#fieldPath=content.title'
+    );
     expect(heading.textContent).toBe(secondEncoded);
 
     controller.enable();
 
-    expect(heading.getAttribute(ATTR_ITEM_ID)).toBe('item-2');
+    expect(heading.getAttribute(ATTR_EDIT_URL)).toBe(
+      'https://acme.admin.datocms.com/editor/items/item-2/edit#fieldPath=content.title'
+    );
     expect(heading.textContent).toBe('Updated title');
 
     controller.dispose();

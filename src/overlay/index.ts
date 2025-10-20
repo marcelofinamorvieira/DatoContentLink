@@ -1,3 +1,8 @@
+/**
+ * Overlay rendering logic: highlights editable regions under the pointer and
+ * opens the editor when clicked. Lives separately from the controller so it
+ * can be unit-tested and swapped out if styling needs change.
+ */
 import { findEditableTarget, type Target } from './resolver.js';
 import { rafThrottle } from '../utils/throttle.js';
 
@@ -8,6 +13,10 @@ type Listener = [
   AddEventListenerOptions | boolean | undefined
 ];
 
+/**
+ * Lightweight view layer that draws a fixed-position rectangle around the
+ * active editable element. Keeps all DOM manipulation in one place.
+ */
 class HighlightOverlay {
   private root: HTMLDivElement | null = null;
   private visible = false;
@@ -16,6 +25,7 @@ class HighlightOverlay {
 
   constructor(private readonly doc: Document) {}
 
+  /** Position and display the overlay around the supplied element. */
   show(el: Element): void {
     const rect = this.measure(el);
     if (!rect) {
@@ -37,6 +47,7 @@ class HighlightOverlay {
     this.root.style.height = `${rect.height + this.padding * 2}px`;
   }
 
+  /** Re-measure the element while keeping the overlay visible. */
   update(el: Element): void {
     if (!this.visible) {
       return;
@@ -44,6 +55,7 @@ class HighlightOverlay {
     this.show(el);
   }
 
+  /** Hide the overlay and restore the previous cursor when present. */
   hide(): void {
     if (!this.root) {
       return;
@@ -53,6 +65,7 @@ class HighlightOverlay {
     this.resetCursor();
   }
 
+  /** Remove the overlay element entirely (used during teardown). */
   dispose(): void {
     if (this.root) {
       this.root.remove();
@@ -62,6 +75,7 @@ class HighlightOverlay {
     this.resetCursor();
   }
 
+  /** Lazily create the overlay element with the expected styling. */
   private ensureRoot(): void {
     if (this.root) {
       return;
@@ -89,6 +103,7 @@ class HighlightOverlay {
     this.root = root;
   }
 
+  /** Capture the current cursor so we can restore it after highlighting. */
   private setCursorPointer(): void {
     const body = this.doc.body;
     if (!body) {
@@ -100,6 +115,7 @@ class HighlightOverlay {
     body.style.cursor = 'pointer';
   }
 
+  /** Restore the cursor that was active before the overlay appeared. */
   private resetCursor(): void {
     if (this.prevCursor === null) {
       return;
@@ -114,6 +130,7 @@ class HighlightOverlay {
     body.style.cursor = previous;
   }
 
+  /** Compute the bounding box for the target element, ignoring zero-size nodes. */
   private measure(el: Element): { top: number; left: number; width: number; height: number } | null {
     if (typeof el.getBoundingClientRect !== 'function') {
       return null;
@@ -126,6 +143,11 @@ class HighlightOverlay {
   }
 }
 
+/**
+ * Attach the overlay to the provided document (defaulting to the global one)
+ * and wire up the pointer/focus listeners required to drive it.
+ * Returns a disposer that removes all listeners and DOM elements.
+ */
 export function setupOverlay(doc?: Document): () => void {
   const resolvedDoc = doc ?? (typeof document !== 'undefined' ? document : null);
   if (!resolvedDoc) {
@@ -137,6 +159,7 @@ export function setupOverlay(doc?: Document): () => void {
   let resizeObserver: ResizeObserver | null = null;
   const view = resolvedDoc.defaultView ?? (typeof window !== 'undefined' ? window : null);
 
+  // Keep the overlay aligned with the active element without thrashing.
   const refresh = rafThrottle(() => {
     if (!current) {
       overlay.hide();
@@ -149,6 +172,7 @@ export function setupOverlay(doc?: Document): () => void {
     overlay.update(current.el);
   });
 
+  // Watch the active element for size changes so the overlay adjusts in place.
   const observe = (target: Element | null) => {
     if (resizeObserver) {
       resizeObserver.disconnect();
@@ -167,6 +191,7 @@ export function setupOverlay(doc?: Document): () => void {
     resizeObserver.observe(target);
   };
 
+  // Update the highlighted element and manage resize observation lifecycle.
   const setCurrent = (next: Target | null) => {
     if (next && !next.el.isConnected) {
       next = null;
@@ -187,6 +212,7 @@ export function setupOverlay(doc?: Document): () => void {
     }
   };
 
+  // Open the edit URL in a new tab, respecting modifier keys when possible.
   const open = (target: Target, event: MouseEvent | KeyboardEvent) => {
     if (event instanceof MouseEvent && event.button !== 0) {
       return;
@@ -198,6 +224,7 @@ export function setupOverlay(doc?: Document): () => void {
   };
 
   const handlePointer = (event: PointerEvent) => {
+    // Only react to mouse pointers; touch/pen interactions would be noisy.
     if (event.pointerType && event.pointerType !== 'mouse') {
       return;
     }

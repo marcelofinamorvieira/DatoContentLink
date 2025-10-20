@@ -1,7 +1,18 @@
+/**
+ * Steganography helpers built on top of @vercel/stega.
+ * These utilities decode the zero-width encoded metadata that DatoCMS embeds
+ * into strings (text content, alt attributes, etc.) and normalize the result
+ * into the strongly typed structure consumed by the rest of the SDK.
+ */
 import { vercelStegaDecode, vercelStegaSplit } from '@vercel/stega';
 import { DecodedInfo } from './types.js';
 import { extractFieldPathFromUrl } from '../link/fieldPath.js';
 
+/**
+ * Decode the stega payload embedded inside `input`, returning the core metadata
+ * the overlay system understands. If the string does not contain an encoded
+ * segment (or if decoding fails) we return null so callers can skip stamping.
+ */
 export function decodeStega(
   input: string,
   split?: ReturnType<typeof vercelStegaSplit>
@@ -71,6 +82,10 @@ export function decodeStega(
   return info;
 }
 
+/**
+ * Remove stega metadata from a string while preserving the human-visible content.
+ * Useful when rendering text back to end users or performing comparisons.
+ */
 export function stripStega(
   input: string,
   split?: ReturnType<typeof vercelStegaSplit>
@@ -83,6 +98,7 @@ export function stripStega(
   return resolvedSplit.cleaned ?? input;
 }
 
+// Normalize arbitrary values into trimmed strings, returning undefined for anything empty.
 function string(value: unknown): string | undefined {
   if (typeof value !== 'string') {
     return undefined;
@@ -91,6 +107,7 @@ function string(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+// We only try to derive IDs from hrefs that clearly point back to a DatoCMS admin host.
 function looksLikeDatoHref(href: string, origin?: string): boolean {
   if (origin && !origin.includes('datocms')) {
     return false;
@@ -103,6 +120,10 @@ function looksLikeDatoHref(href: string, origin?: string): boolean {
   }
 }
 
+/**
+ * Infer record identifiers from a DatoCMS editor URL, primarily used when the
+ * upstream payload did not embed item IDs explicitly.
+ */
 function deriveDatoInfoFromHref(href: string): {
   itemId?: string;
   itemTypeId?: string;

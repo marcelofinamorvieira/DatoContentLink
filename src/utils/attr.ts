@@ -1,3 +1,8 @@
+/**
+ * Helpers for working with explicit data-datocms-* attributes. These are used
+ * when content is pre-annotated on the server or when the dev tools need to
+ * reconstruct metadata without accessing stega payloads.
+ */
 import { DecodedInfo } from '../decode/types.js';
 import { normalizeFieldPath } from '../link/fieldPath.js';
 import {
@@ -25,6 +30,10 @@ export const EXPLICIT_ATTRIBUTE_NAMES = [
   DATA_ATTR_LOCALE
 ];
 
+/**
+ * Interpret explicit attributes on an element and return a DecodedInfo payload.
+ * Falls back to JSON payloads when available and gracefully handles partial data.
+ */
 export function readExplicitInfo(element: Element): DecodedInfo | null {
   const jsonRaw = element.getAttribute(DATA_ATTR_EDIT_INFO);
   let fromJson: Partial<DecodedInfo> | null = null;
@@ -76,10 +85,12 @@ export function readExplicitInfo(element: Element): DecodedInfo | null {
   };
 }
 
+// Narrow assorted values down to a non-empty trimmed string or undefined.
 function stringOrUndefined(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }
 
+// Similar to stringOrUndefined but preserves null when no value is present.
 function stringOrNull(value: unknown): string | null {
   if (value == null) {
     return null;
@@ -91,6 +102,7 @@ function stringOrNull(value: unknown): string | null {
   return null;
 }
 
+// Prefer the attribute value when set, otherwise fall back to the provided default.
 function attrOr<T extends string | null | undefined>(fallback: T, element: Element, attribute: string): T {
   const raw = element.getAttribute(attribute);
   if (raw == null) {

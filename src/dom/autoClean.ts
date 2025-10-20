@@ -1,3 +1,8 @@
+/**
+ * Utilities that eagerly strip stega metadata from DOM subtrees. Useful when
+ * you need to display content without overlays (e.g. static exports, emails)
+ * but still receive data from preview APIs.
+ */
 import { splitStega } from '../stega/split.js';
 import { AUTO_CLEAN_ATTR } from '../utils/attr.js';
 
@@ -19,6 +24,7 @@ const NOOP = () => {
   /* noop */
 };
 
+// Merge provided options with defaults while cloning arrays to avoid mutation leaks.
 function resolveOptions(raw?: AutoCleanOptions): Required<AutoCleanOptions> {
   return {
     delayMs: raw?.delayMs ?? DEFAULT_DELAY_MS,
@@ -29,6 +35,10 @@ function resolveOptions(raw?: AutoCleanOptions): Required<AutoCleanOptions> {
   };
 }
 
+/**
+ * Clean stega metadata inside `root` and (optionally) keep watching for changes.
+ * Returns a disposer so callers can stop the observer/timers when done.
+ */
 export function autoCleanStegaWithin(root: Element, raw?: AutoCleanOptions): () => void {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     return NOOP;
@@ -98,6 +108,7 @@ export function autoCleanStegaWithin(root: Element, raw?: AutoCleanOptions): () 
   };
 }
 
+// Skip cleaning for elements that match a caller-provided allowlist (e.g. editors).
 function isSkipped(element: Element | null, selectors: readonly string[]): boolean {
   if (!element || selectors.length === 0) {
     return false;
@@ -105,6 +116,7 @@ function isSkipped(element: Element | null, selectors: readonly string[]): boole
   return selectors.some((selector) => element.closest(selector));
 }
 
+// Single sweep that strips stega markers from text nodes and optionally image alts.
 function cleanPass(root: Element, opts: Required<AutoCleanOptions>): void {
   if (!root.isConnected) {
     return;
@@ -145,6 +157,11 @@ function cleanPass(root: Element, opts: Required<AutoCleanOptions>): void {
   });
 }
 
+/**
+ * Convenience helper that wires auto clean-up for every element that declares
+ * `data-datocms-auto-clean`. Mirrors the main enable API but purely removes
+ * metadata without stamping overlays.
+ */
 export function enableDatoAutoClean(
   selector = `[${AUTO_CLEAN_ATTR}]`,
   rawOpts?: Omit<AutoCleanOptions, 'observe'>

@@ -1,3 +1,4 @@
+/** React hook wrapper around the auto-clean utility. */
 import { useEffect, type RefObject } from 'react';
 import { autoCleanStegaWithin } from '../dom/autoClean.js';
 import type { AutoCleanOptions } from '../dom/autoClean.js';

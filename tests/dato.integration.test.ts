@@ -254,8 +254,8 @@ function parseDatoHref(href: string) {
     expect(editUrl).not.toBeNull();
     const normalizedBase = baseEditingUrl.replace(/\/$/, '');
     expect((editUrl ?? '').startsWith(normalizedBase)).toBe(true);
-    expect(heroTitleEl?.getAttribute(ATTR_ITEM_ID)).toBe(previewHome.id);
-    expect(heroTitleEl?.getAttribute(ATTR_ITEM_TYPE_ID)).toBeDefined();
+    expect(heroTitleEl?.hasAttribute(ATTR_ITEM_ID)).toBe(false);
+    expect(heroTitleEl?.hasAttribute(ATTR_ITEM_TYPE_ID)).toBe(false);
     expect(heroTitleEl?.getAttribute(ATTR_GENERATED)).toBe('stega');
     expect(heroTitleEl?.textContent).toBe(stripStega(heroSection.heroTitle));
 

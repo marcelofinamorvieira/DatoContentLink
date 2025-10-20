@@ -1,3 +1,7 @@
+/**
+ * Lightweight diagnostics for inspecting the current stega footprint. Used by
+ * the dev panel and debugging scripts to gauge whether overlays were stamped.
+ */
 import {
   ATTR_EDIT_URL,
   ATTR_GENERATED,
@@ -22,6 +26,10 @@ export type StegaState = {
   };
 };
 
+/**
+ * Scan the DOM (or a subtree) and return counters describing how much stega
+ * content remains. Helpful when diagnosing why overlays are or are not present.
+ */
 export function checkStegaState(root?: ParentNode): StegaState {
   const fallbackScope = (root ?? ({} as ParentNode)) as ParentNode;
   const globalDoc = typeof document !== 'undefined' ? document : null;

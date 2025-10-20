@@ -1,4 +1,9 @@
-import { markDOMFromStega } from './stega/markFromStega.js';
+/**
+ * Entry point for enabling DatoCMS visual editing overlays in the browser.
+ * Orchestrates DOM observation, overlay rendering, optional dev tooling, and
+ * exposes a controller so hosts can toggle the experience on and off.
+ */
+import { markDOMFromStega, defaultResolveEditUrl } from './stega/markFromStega.js';
 import { clearGeneratedAttributes } from './dom/stamp.js';
 import { annotateExplicitTargetsForDebug } from './dom/annotateDebug.js';
 import { setupOverlay } from './overlay/index.js';
@@ -19,14 +24,22 @@ import type {
   VisualEditingState,
   VisualEditingWarning
 } from './types.js';
+import type { DecodedInfo } from './decode/types.js';
 
+// Internal context passed into the stega marker to keep dependencies explicit.
 type MarkContext = {
   baseEditingUrl: string;
   environment?: string;
   root: ParentNode;
   debug?: boolean;
+  resolveEditUrl: (info: DecodedInfo) => string | null;
 };
 
+/**
+ * Boot the visual-editing runtime. When executed in a browser it returns a live
+ * controller; on the server we hand back a no-op implementation so callers
+ * don't have to guard their usage.
+ */
 export function enableDatoVisualEditing(
   options: EnableDatoVisualEditingOptions
 ): VisualEditingController {
@@ -43,6 +56,9 @@ export function enableDatoVisualEditing(
   return controller;
 }
 
+/**
+ * Browser-only implementation that manages overlay state and DOM bookkeeping.
+ */
 class VisualEditingControllerImpl implements VisualEditingController {
   private readonly context: MarkContext;
   private readonly root: ParentNode;
@@ -52,6 +68,7 @@ class VisualEditingControllerImpl implements VisualEditingController {
   private readonly callbacks: VisualEditingEvents;
   private readonly isDev: boolean;
   private readonly devPanelOption: DevPanelOption | undefined;
+  private readonly resolveEditUrl: (info: DecodedInfo) => string | null;
 
   private observer: MutationObserver | null = null;
   private disposeOverlay: (() => void) | null = null;
@@ -61,6 +78,9 @@ class VisualEditingControllerImpl implements VisualEditingController {
   private readyEmitted = false;
   private warnedNoEditables = false;
 
+  /**
+   * Normalize options and lazily configure helpers (overlay, dev panel, etc.).
+   */
   constructor(options: EnableDatoVisualEditingOptions) {
     const baseEditingUrl = normalizeBaseUrl(options.baseEditingUrl);
     this.root = options.root ?? document;
@@ -70,11 +90,23 @@ class VisualEditingControllerImpl implements VisualEditingController {
       throw new Error('Unable to resolve document for visual editing overlays');
     }
     this.doc = resolvedDoc;
+    const resolveEditUrl =
+      options.resolveEditUrl
+        ? (info: DecodedInfo) =>
+            options.resolveEditUrl?.(info, {
+              baseEditingUrl,
+              environment: options.environment
+            }) ?? null
+        : (info: DecodedInfo) => defaultResolveEditUrl(info, baseEditingUrl, options.environment);
+
+    this.resolveEditUrl = resolveEditUrl;
+
     this.context = {
       baseEditingUrl,
       environment: options.environment,
       root: this.root,
-      debug: options.debug ?? false
+      debug: options.debug ?? false,
+      resolveEditUrl: this.resolveEditUrl
     };
     this.scheduleMark = createScheduler(() => this.runMark());
     this.callbacks = {
@@ -90,6 +122,7 @@ class VisualEditingControllerImpl implements VisualEditingController {
         : true;
   }
 
+  /** Start observing the DOM and stamp overlays immediately. */
   enable(): void {
     if (this.disposed || this.enabled) {
       return;
@@ -100,6 +133,7 @@ class VisualEditingControllerImpl implements VisualEditingController {
     this.runMark();
   }
 
+  /** Tear down observers/overlays but keep the instance reusable. */
   disable(): void {
     if (!this.enabled || this.disposed) {
       return;
@@ -110,6 +144,7 @@ class VisualEditingControllerImpl implements VisualEditingController {
     this.emitState();
   }
 
+  /** Convenience wrapper that flips between enable/disable. */
   toggle(): void {
     if (this.disposed) {
       return;
@@ -121,6 +156,7 @@ class VisualEditingControllerImpl implements VisualEditingController {
     }
   }
 
+  /** Permanently shut down the controller and clear generated attributes. */
   dispose(): void {
     if (this.disposed) {
       return;
@@ -132,14 +168,20 @@ class VisualEditingControllerImpl implements VisualEditingController {
     this.emitState();
   }
 
+  /** Whether the overlays are currently active. */
   isEnabled(): boolean {
     return this.enabled;
   }
 
+  /** Whether the controller has been disposed and cannot be re-enabled. */
   isDisposed(): boolean {
     return this.disposed;
   }
 
+  /**
+   * Re-run the stega scan for the entire tree (or a subtree) on demand.
+   * Useful when content updates happen outside of mutation observers.
+   */
   refresh(root?: ParentNode): void {
     if (this.disposed || !this.enabled) {
       return;
@@ -148,6 +190,9 @@ class VisualEditingControllerImpl implements VisualEditingController {
     this.scheduleMark();
   }
 
+  /**
+   * Wire up DOM observers and auxiliary UI (overlay, dev panel).
+   */
   private attach(): void {
     if (this.observer) {
       return;
@@ -173,6 +218,7 @@ class VisualEditingControllerImpl implements VisualEditingController {
     }
   }
 
+  /** Reverse everything created in `attach`, leaving the DOM untouched. */
   private detach(): void {
     if (this.observer) {
       this.observer.disconnect();
@@ -188,10 +234,15 @@ class VisualEditingControllerImpl implements VisualEditingController {
     }
   }
 
+  /** Only render the dev panel when opted-in and running in a dev build. */
   private shouldShowDevPanel(): boolean {
     return Boolean(this.devPanelOption) && this.isDev;
   }
 
+  /**
+   * Collect mutated subtrees so we can batch-mark them on the next tick.
+   * This keeps dom writes/coalescing predictable even in noisy environments.
+   */
   private handleMutations(mutations: MutationRecord[]): void {
     if (!this.enabled || this.disposed) {
       this.pending.clear();
@@ -230,6 +281,9 @@ class VisualEditingControllerImpl implements VisualEditingController {
     }
   }
 
+  /**
+   * Kick off stega decoding for all pending roots and aggregate the result.
+   */
   private runMark(): void {
     if (!this.enabled || this.disposed) {
       this.pending.clear();
@@ -273,6 +327,10 @@ class VisualEditingControllerImpl implements VisualEditingController {
     this.handleMarkResult(combined);
   }
 
+  /**
+   * Emit events/callbacks and emit a warning the first time we detect no
+   * editable nodes at the root (a common hydration gotcha).
+   */
   private handleMarkResult(summary: MarkSummary): void {
     this.emit(EVENT_MARKED, this.callbacks.onMarked, summary);
 
@@ -301,6 +359,7 @@ class VisualEditingControllerImpl implements VisualEditingController {
     }
   }
 
+  /** Broadcast the current enabled/disposed flags to listeners. */
   private emitState(): void {
     const state: VisualEditingState = {
       enabled: this.enabled,
@@ -309,6 +368,10 @@ class VisualEditingControllerImpl implements VisualEditingController {
     this.emit(EVENT_STATE, this.callbacks.onStateChange, state);
   }
 
+  /**
+   * Invoke the user callback and dispatch a CustomEvent when possible so
+   * non-JS integrations can observe lifecycle changes.
+   */
   private emit<T>(
     type: string,
     callback: ((payload: T) => void) | undefined,
@@ -337,6 +400,10 @@ class VisualEditingControllerImpl implements VisualEditingController {
   }
 }
 
+/**
+ * Minimal controller used when the runtime executes outside the browser.
+ * Keeps the API surface consistent without touching the DOM.
+ */
 function createNoopController(autoEnable: boolean): VisualEditingController {
   let enabled = autoEnable;
   let disposed = false;
@@ -376,6 +443,7 @@ function createNoopController(autoEnable: boolean): VisualEditingController {
   };
 }
 
+// Ensure the base editing url has a stable shape before we build editor links.
 function normalizeBaseUrl(url: string): string {
   if (!url) {
     throw new Error('baseEditingUrl is required');
@@ -391,6 +459,7 @@ function normalizeBaseUrl(url: string): string {
   }
 }
 
+// Debounce repeated mark requests within a microtask to avoid thrashing.
 function createScheduler(fn: () => void): () => void {
   let pending = false;
   const enqueue =

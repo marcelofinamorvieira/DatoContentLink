@@ -1,3 +1,4 @@
+/** Vanilla JS dev panel injected when running outside React environments. */
 import { EVENT_MARKED, EVENT_STATE } from '../constants.js';
 import type { StegaState } from '../utils/state.js';
 import type { MarkSummary } from '../types.js';
@@ -10,6 +11,10 @@ type DevPanelOptions = {
 
 type ControllerStateGetter = () => { enabled: boolean; disposed: boolean };
 
+/**
+ * Mount a lightweight dev panel into the provided document, returning a cleanup
+ * function so the caller can remove it when overlays are disabled.
+ */
 export function setupDevPanel(
   doc: Document,
   getState: ControllerStateGetter,
@@ -92,6 +97,7 @@ export function setupDevPanel(
   };
 }
 
+// Position the dev panel in one of the four corners.
 function applyPosition(node: HTMLElement, position: DevPanelPosition): void {
   node.style.top = '';
   node.style.right = '';
@@ -118,6 +124,7 @@ function applyPosition(node: HTMLElement, position: DevPanelPosition): void {
   }
 }
 
+// Produce a compact description of the current scope for display.
 function describeScope(scope: ParentNode): string {
   if (!(scope instanceof Element)) {
     return 'document';

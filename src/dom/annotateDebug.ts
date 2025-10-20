@@ -1,3 +1,8 @@
+/**
+ * Debug helpers that annotate explicitly tagged nodes (data-datocms-*) with
+ * additional metadata. This makes it easy to inspect server-stamped elements
+ * even when stega payloads were not involved.
+ */
 import { ATTR_EDIT_URL, ATTR_GENERATED, GENERATED_VALUE, ATTR_EDITABLE } from '../constants.js';
 import { readExplicitInfo } from '../utils/attr.js';
 import { stampDebugAttributes } from './stamp.js';
@@ -9,6 +14,10 @@ type AnnotateContext = {
   root: ParentNode;
 };
 
+/**
+ * Ensure explicitly tagged elements surface debug metadata in dev mode.
+ * Generated nodes already have this info, so we skip them here.
+ */
 export function annotateExplicitTargetsForDebug(ctx: AnnotateContext): void {
   const scope = ctx.root as ParentNode & { querySelectorAll: typeof document.querySelectorAll };
   const nodes = scope.querySelectorAll<HTMLElement>(`[${ATTR_EDIT_URL}]`);

@@ -1,3 +1,7 @@
+/**
+ * Helpers focused on `<img alt>` attributes that may contain stega payloads.
+ * These wrap the lower-level stega utilities with image-specific ergonomics.
+ */
 import { splitStega } from '../stega/split.js';
 import { decodeStega } from '../decode/stega.js';
 import type { DecodedInfo } from '../decode/types.js';

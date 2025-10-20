@@ -1,5 +1,11 @@
+/**
+ * Utility helpers for normalizing fieldPath fragments that DatoCMS relies on.
+ * These are shared by both the decoder and explicit attribute builders so that
+ * we produce consistent editor deep links regardless of input shape.
+ */
 type Segment = string;
 
+// Collapse whitespace within a segment and drop it entirely when empty.
 function sanitizeSegment(segment: string): string | null {
   const trimmed = segment.trim();
   if (!trimmed) {
@@ -8,6 +14,7 @@ function sanitizeSegment(segment: string): string | null {
   return trimmed;
 }
 
+// Support arrays like ['hero', 0, 'title'] by normalizing each fragment.
 function fromArray(value: unknown[]): string | null {
   const segments: Segment[] = [];
   for (const part of value) {
@@ -29,6 +36,10 @@ function fromArray(value: unknown[]): string | null {
   return segments.join('.');
 }
 
+/**
+ * Accepts loose input (string, array, number) and returns a sanitized dot-path
+ * or null when the value cannot be interpreted as a fieldPath.
+ */
 export function normalizeFieldPath(path: unknown): string | null {
   if (path == null) {
     return null;
@@ -53,6 +64,10 @@ export function normalizeFieldPath(path: unknown): string | null {
   return null;
 }
 
+/**
+ * Append the locale segment to the fieldPath when requested. This mirrors how
+ * the editor expects localized fields to be referenced in hash fragments.
+ */
 export function withLocaleFieldPath(
   fieldPath: string | null,
   locale: string | null | undefined
@@ -79,6 +94,10 @@ export function withLocaleFieldPath(
   return `${fieldPath}.${trimmedLocale}`;
 }
 
+/**
+ * Inspect a URL hash for an encoded `fieldPath` parameter. Handles both proper
+ * URLs and strings that merely contain a hash fragment.
+ */
 export function extractFieldPathFromUrl(url: string): string | null {
   if (!url) {
     return null;
@@ -112,6 +131,10 @@ export function extractFieldPathFromUrl(url: string): string | null {
   return parse(hash);
 }
 
+/**
+ * Ensure that `fieldPath` appears inside the URL hash, preserving any existing
+ * parameters. Falls back to appending manually when `url` cannot be parsed.
+ */
 export function mergeFieldPathIntoUrl(url: string, fieldPath: string): string {
   if (!fieldPath) {
     return url;

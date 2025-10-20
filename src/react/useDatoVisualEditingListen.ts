@@ -1,3 +1,7 @@
+/**
+ * React hook that wires a subscription (typically to a CMS client) into the
+ * visual-editing controller. Whenever the subscriber emits, we refresh overlays.
+ */
 import { useEffect, useRef, type RefObject } from 'react';
 import { enableDatoVisualEditing } from '../enable.js';
 import type {
@@ -18,6 +22,10 @@ export type UseDatoVisualEditingListenOptions = {
   onError?: (err: unknown) => void;
 };
 
+/**
+ * Connect a data subscription to the visual-editing controller. Creates a
+ * controller on demand when one isn’t provided and disposes it on unmount.
+ */
 export function useDatoVisualEditingListen(
   subscribe: ListenSubscribe,
   options?: UseDatoVisualEditingListenOptions

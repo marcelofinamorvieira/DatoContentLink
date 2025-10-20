@@ -1,8 +1,14 @@
+/**
+ * Wrap a fetch implementation so every request carries the headers required
+ * for DatoCMS visual editing (X-Visual-Editing + X-Base-Editing-Url). This
+ * keeps preview queries lightweight for integrators.
+ */
 export function withContentLinkHeaders(
   fetchImpl: typeof fetch = fetch,
   defaultBaseEditingUrl?: string
 ) {
   return async (input: RequestInfo | URL, init: RequestInit = {}) => {
+    // Start by cloning any existing headers so we respect caller intent.
     const baseHeaders = input instanceof Request ? input.headers : undefined;
     const headers = new Headers(baseHeaders);
     const initHeaders = new Headers(init.headers ?? undefined);
