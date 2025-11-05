@@ -16,6 +16,27 @@ type Listener = {
   options?: AddEventListenerOptions | boolean;
 };
 
+const isPointerEvent = (event: Event): event is PointerEvent => {
+  if (typeof PointerEvent !== 'undefined') {
+    return event instanceof PointerEvent;
+  }
+  return typeof (event as PointerEvent).pointerType === 'string';
+};
+
+const isMouseEvent = (event: Event): event is MouseEvent => {
+  if (typeof MouseEvent !== 'undefined') {
+    return event instanceof MouseEvent;
+  }
+  return typeof (event as MouseEvent).button === 'number';
+};
+
+const isKeyboardEvent = (event: Event): event is KeyboardEvent => {
+  if (typeof KeyboardEvent !== 'undefined') {
+    return event instanceof KeyboardEvent;
+  }
+  return typeof (event as KeyboardEvent).key === 'string';
+};
+
 /**
  * Lightweight view layer that draws a fixed-position rectangle around the
  * active editable element. Keeps all DOM manipulation in one place.
@@ -226,7 +247,10 @@ export function setupOverlay(doc?: Document): () => void {
     opener?.open(target.editUrl, '_blank', 'noopener,noreferrer');
   };
 
-  const handlePointer = (event: PointerEvent) => {
+  const handlePointer = (event: Event) => {
+    if (!isPointerEvent(event)) {
+      return;
+    }
     // Only react to mouse pointers; touch/pen interactions would be noisy.
     if (event.pointerType && event.pointerType !== 'mouse') {
       return;
@@ -235,7 +259,10 @@ export function setupOverlay(doc?: Document): () => void {
     setCurrent(target);
   };
 
-  const handlePointerLeave = (event: PointerEvent) => {
+  const handlePointerLeave = (event: Event) => {
+    if (!isPointerEvent(event)) {
+      return;
+    }
     if (event.pointerType && event.pointerType !== 'mouse') {
       return;
     }
@@ -246,7 +273,10 @@ export function setupOverlay(doc?: Document): () => void {
     }
   };
 
-  const handleClick = (event: MouseEvent) => {
+  const handleClick = (event: Event) => {
+    if (!isMouseEvent(event)) {
+      return;
+    }
     const target = findEditableTarget(event.target instanceof Element ? event.target : null);
     if (!target) {
       return;
@@ -255,7 +285,7 @@ export function setupOverlay(doc?: Document): () => void {
     open(target, event);
   };
 
-  const handleFocusIn = (event: FocusEvent) => {
+  const handleFocusIn = (event: Event) => {
     const target = findEditableTarget(event.target instanceof Element ? event.target : null);
     setCurrent(target);
   };
@@ -264,7 +294,10 @@ export function setupOverlay(doc?: Document): () => void {
     setCurrent(null);
   };
 
-  const handleKeyDown = (event: KeyboardEvent) => {
+  const handleKeyDown = (event: Event) => {
+    if (!isKeyboardEvent(event)) {
+      return;
+    }
     if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') {
       return;
     }
