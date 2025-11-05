@@ -7,7 +7,7 @@ const { vercelStegaCombine } = stega;
 
 const ATTR_EDIT_URL = 'data-datocms-edit-url';
 const ATTR_ITEM_ID = 'data-datocms-item-id';
-const ATTR_ENV = 'data-datocms-env';
+const ATTR_ENV = 'data-datocms-environment';
 const ATTR_LOCALE = 'data-datocms-locale';
 const ATTR_GENERATED = 'data-datocms-generated';
 

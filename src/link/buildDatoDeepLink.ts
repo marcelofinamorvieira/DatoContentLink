@@ -10,11 +10,7 @@ import {
   normalizeFieldPath,
   withLocaleFieldPath
 } from './fieldPath.js';
-
-// Avoid double slashes when concatenating segments.
-function stripTrailingSlash(url: string): string {
-  return url.endsWith('/') ? url.slice(0, -1) : url;
-}
+import { stripTrailingSlash } from '../utils/url.js';
 
 // Only treat the payload URL as authoritative when it belongs to the same project.
 function sameOrigin(url: string, base: string): boolean {

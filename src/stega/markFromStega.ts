@@ -17,6 +17,7 @@ import { buildDatoDeepLink } from '../link/buildDatoDeepLink.js';
 import { fromDecoded, safeStringify } from '../utils/debug.js';
 import { splitStega } from './split.js';
 import type { MarkSummary } from '../types.js';
+import { resolveDocument } from '../utils/dom.js';
 
 // Narrow view of the controller's state that the marker requires.
 type MarkContext = {
@@ -32,10 +33,7 @@ type MarkContext = {
  * and return bookkeeping information that the controller can aggregate.
  */
 export function markDOMFromStega(ctx: MarkContext): MarkSummary {
-  const docCtor = typeof Document !== 'undefined' ? Document : undefined;
-  const globalDoc = typeof document !== 'undefined' ? document : undefined;
-  const doc =
-    (docCtor && ctx.root instanceof docCtor ? (ctx.root as Document) : ctx.root.ownerDocument ?? globalDoc) ?? null;
+  const doc = resolveDocument(ctx.root);
 
   if (!doc) {
     return {

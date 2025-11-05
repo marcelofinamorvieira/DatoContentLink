@@ -18,6 +18,7 @@ import {
   DATA_ATTR_LOCALE,
   EXPLICIT_ATTRIBUTE_NAMES
 } from './attr.js';
+import { trimmedOrUndefined } from './string.js';
 
 export type EditTagInfo = {
   itemId?: string;
@@ -40,12 +41,12 @@ export function buildEditTagAttributes(
   info: EditTagInfo,
   format: EditTagFormat = 'url'
 ): Record<string, string> {
-  const cleanedItemId = cleanString(info.itemId);
-  const cleanedItemTypeId = cleanString(info.itemTypeId);
-  const cleanedEnvironment = cleanString(info.environment);
-  const cleanedLocale = cleanString(info.locale);
-  const cleanedEditUrl = cleanString(info.editUrl);
-  const cleanedEditingUrl = cleanString(info._editingUrl);
+  const cleanedItemId = trimmedOrUndefined(info.itemId);
+  const cleanedItemTypeId = trimmedOrUndefined(info.itemTypeId);
+  const cleanedEnvironment = trimmedOrUndefined(info.environment);
+  const cleanedLocale = trimmedOrUndefined(info.locale);
+  const cleanedEditUrl = trimmedOrUndefined(info.editUrl);
+  const cleanedEditingUrl = trimmedOrUndefined(info._editingUrl);
   const resolvedEditUrl = cleanedEditUrl ?? cleanedEditingUrl;
   const explicitFieldPath = normalizeFieldPath(info.fieldPath ?? undefined);
   const extractedFieldPath = resolvedEditUrl
@@ -136,11 +137,3 @@ export function applyEditTagAttributes(
   }
 }
 
-// Normalize optional strings by trimming and discarding empty values.
-function cleanString(value: string | undefined): string | undefined {
-  if (value == null) {
-    return undefined;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-}

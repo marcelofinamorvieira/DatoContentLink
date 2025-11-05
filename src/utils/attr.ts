@@ -12,9 +12,15 @@ import {
   ATTR_ENV,
   ATTR_LOCALE
 } from '../constants.js';
+import { trimmedOrNull, trimmedOrUndefined } from './string.js';
 
 export const AUTO_CLEAN_ATTR = 'data-datocms-auto-clean';
 export const DATA_ATTR_EDIT_INFO = 'data-datocms-edit-info';
+/**
+ * Aliases for the generated attribute names. Keeping them colocated with the
+ * explicit-tag helpers makes it clear that both workflows share the exact same
+ * DOM markers while still allowing consumers to import from a single module.
+ */
 export const DATA_ATTR_ITEM_ID = ATTR_ITEM_ID;
 export const DATA_ATTR_ITEM_TYPE_ID = ATTR_ITEM_TYPE_ID;
 export const DATA_ATTR_EDIT_URL = ATTR_EDIT_URL;
@@ -42,12 +48,12 @@ export function readExplicitInfo(element: Element): DecodedInfo | null {
     try {
       const parsed = JSON.parse(jsonRaw) as Record<string, unknown>;
       fromJson = {
-        itemId: stringOrUndefined(parsed.itemId),
-        itemTypeId: stringOrUndefined(parsed.itemTypeId),
+        itemId: trimmedOrUndefined(parsed.itemId),
+        itemTypeId: trimmedOrUndefined(parsed.itemTypeId),
         fieldPath: normalizeFieldPath(parsed.fieldPath ?? undefined) ?? undefined,
-        environment: stringOrNull(parsed.environment),
-        locale: stringOrNull(parsed.locale),
-        editUrl: stringOrUndefined(parsed.editUrl)
+        environment: trimmedOrNull(parsed.environment),
+        locale: trimmedOrNull(parsed.locale),
+        editUrl: trimmedOrUndefined(parsed.editUrl)
       };
     } catch {
       fromJson = null;
@@ -83,23 +89,6 @@ export function readExplicitInfo(element: Element): DecodedInfo | null {
       json: jsonRaw ?? null
     }
   };
-}
-
-// Narrow assorted values down to a non-empty trimmed string or undefined.
-function stringOrUndefined(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
-}
-
-// Similar to stringOrUndefined but preserves null when no value is present.
-function stringOrNull(value: unknown): string | null {
-  if (value == null) {
-    return null;
-  }
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    return trimmed.length > 0 ? trimmed : null;
-  }
-  return null;
 }
 
 // Prefer the attribute value when set, otherwise fall back to the provided default.

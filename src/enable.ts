@@ -9,6 +9,9 @@ import { annotateExplicitTargetsForDebug } from './dom/annotateDebug.js';
 import { setupOverlay } from './overlay/index.js';
 import { setupDevPanel } from './debug/devPanel.js';
 import { checkStegaState } from './utils/state.js';
+import { normalizeBaseUrl } from './utils/url.js';
+import { resolveDocument } from './utils/dom.js';
+import { isDevelopment } from './utils/env.js';
 import {
   EVENT_READY,
   EVENT_MARKED,
@@ -68,7 +71,6 @@ class VisualEditingControllerImpl implements VisualEditingController {
   private readonly callbacks: VisualEditingEvents;
   private readonly isDev: boolean;
   private readonly devPanelOption: DevPanelOption | undefined;
-  private readonly resolveEditUrl: (info: DecodedInfo) => string | null;
 
   private observer: MutationObserver | null = null;
   private disposeOverlay: (() => void) | null = null;
@@ -82,44 +84,63 @@ class VisualEditingControllerImpl implements VisualEditingController {
    * Normalize options and lazily configure helpers (overlay, dev panel, etc.).
    */
   constructor(options: EnableDatoVisualEditingOptions) {
-    const baseEditingUrl = normalizeBaseUrl(options.baseEditingUrl);
     this.root = options.root ?? document;
-    const resolvedDoc =
-      this.root instanceof Document ? this.root : this.root.ownerDocument ?? document;
-    if (!resolvedDoc) {
-      throw new Error('Unable to resolve document for visual editing overlays');
+    this.doc = this.ensureDocument(this.root);
+
+    const baseEditingUrl = normalizeBaseUrl(options.baseEditingUrl);
+    const resolveEditUrl = this.buildResolveEditUrl(options, baseEditingUrl);
+
+    this.context = this.buildContext(options, baseEditingUrl, resolveEditUrl);
+    this.scheduleMark = createScheduler(() => this.runMark());
+    this.callbacks = this.extractCallbacks(options);
+    this.devPanelOption = options.devPanel;
+    this.isDev = isDevelopment();
+  }
+
+  private buildResolveEditUrl(
+    options: EnableDatoVisualEditingOptions,
+    baseEditingUrl: string
+  ): (info: DecodedInfo) => string | null {
+    if (options.resolveEditUrl) {
+      return (info: DecodedInfo) =>
+        options.resolveEditUrl?.(info, {
+          baseEditingUrl,
+          environment: options.environment
+        }) ?? null;
     }
-    this.doc = resolvedDoc;
-    const resolveEditUrl =
-      options.resolveEditUrl
-        ? (info: DecodedInfo) =>
-            options.resolveEditUrl?.(info, {
-              baseEditingUrl,
-              environment: options.environment
-            }) ?? null
-        : (info: DecodedInfo) => defaultResolveEditUrl(info, baseEditingUrl, options.environment);
 
-    this.resolveEditUrl = resolveEditUrl;
+    return (info: DecodedInfo) => defaultResolveEditUrl(info, baseEditingUrl, options.environment);
+  }
 
-    this.context = {
+  private buildContext(
+    options: EnableDatoVisualEditingOptions,
+    baseEditingUrl: string,
+    resolveEditUrl: (info: DecodedInfo) => string | null
+  ): MarkContext {
+    return {
       baseEditingUrl,
       environment: options.environment,
       root: this.root,
       debug: options.debug ?? false,
-      resolveEditUrl: this.resolveEditUrl
+      resolveEditUrl
     };
-    this.scheduleMark = createScheduler(() => this.runMark());
-    this.callbacks = {
+  }
+
+  private extractCallbacks(options: EnableDatoVisualEditingOptions): VisualEditingEvents {
+    return {
       onReady: options.onReady,
       onMarked: options.onMarked,
       onStateChange: options.onStateChange,
       onWarning: options.onWarning
     };
-    this.devPanelOption = options.devPanel;
-    this.isDev =
-      typeof process !== 'undefined' && process?.env?.NODE_ENV
-        ? process.env.NODE_ENV !== 'production'
-        : true;
+  }
+
+  private ensureDocument(root: ParentNode): Document {
+    const resolved = resolveDocument(root);
+    if (!resolved) {
+      throw new Error('Unable to resolve document for visual editing overlays');
+    }
+    return resolved;
   }
 
   /** Start observing the DOM and stamp overlays immediately. */
@@ -441,22 +462,6 @@ function createNoopController(autoEnable: boolean): VisualEditingController {
       // no-op on the server
     }
   };
-}
-
-// Ensure the base editing url has a stable shape before we build editor links.
-function normalizeBaseUrl(url: string): string {
-  if (!url) {
-    throw new Error('baseEditingUrl is required');
-  }
-
-  const trimmed = url.trim();
-  const sanitized = trimmed.endsWith('/') ? trimmed.slice(0, -1) : trimmed;
-  try {
-    const parsed = new URL(sanitized);
-    return `${parsed.origin}${parsed.pathname.replace(/\/$/, '')}`;
-  } catch {
-    throw new Error('baseEditingUrl must be a valid URL');
-  }
 }
 
 // Debounce repeated mark requests within a microtask to avoid thrashing.

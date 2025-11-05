@@ -1,6 +1,6 @@
 {
   "name": "datocms-visual-editing",
-  "version": "0.9.1",
+  "version": "1.0.0",
   "description": "DatoCMS visual editing overlays without Vercel dependencies.",
   "type": "module",
   "types": "./dist/index.d.ts",
@@ -17,9 +17,11 @@
   "files": [
     "dist",
     "README.md",
+    "README.full.md",
     "LICENSE",
     "LICENSES.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "docs/usage.gif"
   ],
   "engines": {
     "node": ">=18"
@@ -33,13 +35,19 @@
     "build": "pnpm run clean && tsc -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
+    "lint": "eslint \"src/**/*.{ts,tsx}\" \"tests/**/*.ts\"",
+    "format": "prettier --write \"{src,tests}/**/*.ts\"",
+    "format:check": "prettier --check \"{src,tests}/**/*.ts\"",
     "prepublishOnly": "pnpm run build && pnpm run test"
   },
   "keywords": [
     "datocms",
     "visual-editing",
     "stega",
-    "content-link"
+    "content-link",
+    "cms",
+    "headless-cms",
+    "preview"
   ],
   "author": {
     "name": "Marcelo Finamor Vieira",
@@ -47,11 +55,17 @@
   },
   "license": "MIT",
   "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
     "@types/jsdom": "^21.1.0",
     "@types/node": "^20.14.10",
     "@types/react": "^19.0.0",
+    "@vitest/coverage-v8": "^1.6.0",
     "dotenv": "^16.4.5",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
     "jsdom": "^24.0.0",
+    "prettier": "^3.3.3",
     "rimraf": "^5.0.5",
     "typescript": "^5.5.4",
     "vitest": "^1.6.0"
@@ -70,8 +84,7 @@
   "packageManager": "pnpm@9.6.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/marcelofinamorvieira/DatoContentLink.git",
-    "directory": "datocms-visual-editing"
+    "url": "https://github.com/marcelofinamorvieira/DatoContentLink.git"
   },
   "bugs": {
     "url": "https://github.com/marcelofinamorvieira/DatoContentLink/issues"

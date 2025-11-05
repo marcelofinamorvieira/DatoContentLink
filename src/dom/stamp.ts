@@ -19,6 +19,7 @@ import {
   ATTR_DEBUG_REASON,
   DEBUG_ATTRS
 } from '../constants.js';
+import { hasGeneratedAttribute, setAttributesIfChanged } from '../utils/dom.js';
 
 /**
  * Minimal payload required to stamp an element as editable. Today we only keep
@@ -39,11 +40,11 @@ const warnedCollisionElements = new WeakSet<Element>();
  * changed (useful for analytics or follow-up debug work).
  */
 export function stampAttributes(el: Element, info: EditInfo): boolean {
-  if (el.hasAttribute(ATTR_EDIT_URL) && el.getAttribute(ATTR_GENERATED) !== GENERATED_VALUE) {
+  if (el.hasAttribute(ATTR_EDIT_URL) && !hasGeneratedAttribute(el)) {
     return false;
   }
 
-  const existingGenerated = el.getAttribute(ATTR_GENERATED) === GENERATED_VALUE;
+  const existingGenerated = hasGeneratedAttribute(el);
   const existingUrl = el.getAttribute(ATTR_EDIT_URL);
 
   if (existingGenerated && existingUrl && existingUrl !== info.editUrl) {
@@ -54,14 +55,7 @@ export function stampAttributes(el: Element, info: EditInfo): boolean {
     [ATTR_EDIT_URL]: info.editUrl
   };
 
-  let changed = false;
-
-  for (const [key, value] of Object.entries(next)) {
-    if (el.getAttribute(key) !== value) {
-      el.setAttribute(key, value);
-      changed = true;
-    }
-  }
+  let changed = setAttributesIfChanged(el, next);
 
   const removableAttrs = [ATTR_ITEM_ID, ATTR_ITEM_TYPE_ID, ATTR_ENV, ATTR_LOCALE];
   for (const attr of removableAttrs) {

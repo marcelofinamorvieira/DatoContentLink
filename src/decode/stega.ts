@@ -7,6 +7,7 @@
 import { vercelStegaDecode, vercelStegaSplit } from '@vercel/stega';
 import { DecodedInfo } from './types.js';
 import { extractFieldPathFromUrl } from '../link/fieldPath.js';
+import { trimmedOrUndefined } from '../utils/string.js';
 
 /**
  * Decode the stega payload embedded inside `input`, returning the core metadata
@@ -39,14 +40,14 @@ export function decodeStega(
 
   const data = decoded as Record<string, unknown>;
 
-  let itemId = string(data.itemId);
-  let itemTypeId = string(data.itemTypeId);
-  let fieldPath = string(data.fieldPath);
-  let environment = string(data.environment) ?? null;
-  const locale = string(data.locale) ?? null;
-  const origin = string(data.origin);
-  const href = string(data.href);
-  let editUrl = string(data.editUrl) ?? href;
+  let itemId = trimmedOrUndefined(data.itemId);
+  let itemTypeId = trimmedOrUndefined(data.itemTypeId);
+  let fieldPath = trimmedOrUndefined(data.fieldPath);
+  let environment = trimmedOrUndefined(data.environment) ?? null;
+  const locale = trimmedOrUndefined(data.locale) ?? null;
+  const origin = trimmedOrUndefined(data.origin);
+  const href = trimmedOrUndefined(data.href);
+  const editUrl = trimmedOrUndefined(data.editUrl) ?? href;
 
   if (href && looksLikeDatoHref(href, origin)) {
     const derived = deriveDatoInfoFromHref(href);
@@ -96,15 +97,6 @@ export function stripStega(
 
   const resolvedSplit = split ?? vercelStegaSplit(input);
   return resolvedSplit.cleaned ?? input;
-}
-
-// Normalize arbitrary values into trimmed strings, returning undefined for anything empty.
-function string(value: unknown): string | undefined {
-  if (typeof value !== 'string') {
-    return undefined;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 // We only try to derive IDs from hrefs that clearly point back to a DatoCMS admin host.

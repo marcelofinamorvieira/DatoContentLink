@@ -6,12 +6,15 @@
 import { findEditableTarget, type Target } from './resolver.js';
 import { rafThrottle } from '../utils/throttle.js';
 
-type Listener = [
-  EventTarget,
-  string,
-  EventListenerOrEventListenerObject | ((...args: any[]) => void),
-  AddEventListenerOptions | boolean | undefined
-];
+const OVERLAY_PADDING = 8;
+const OVERLAY_Z_INDEX = '2147483646';
+
+type Listener = {
+  target: EventTarget;
+  type: string;
+  handler: EventListenerOrEventListenerObject;
+  options?: AddEventListenerOptions | boolean;
+};
 
 /**
  * Lightweight view layer that draws a fixed-position rectangle around the
@@ -21,7 +24,7 @@ class HighlightOverlay {
   private root: HTMLDivElement | null = null;
   private visible = false;
   private prevCursor: string | null = null;
-  private readonly padding = 8;
+  private readonly padding = OVERLAY_PADDING;
 
   constructor(private readonly doc: Document) {}
 
@@ -96,7 +99,7 @@ class HighlightOverlay {
     root.style.boxSizing = 'border-box';
     root.style.pointerEvents = 'none';
     root.style.cursor = 'pointer';
-    root.style.zIndex = '2147483646';
+    root.style.zIndex = OVERLAY_Z_INDEX;
     root.style.display = 'none';
     root.setAttribute('aria-hidden', 'true');
     body.appendChild(root);
@@ -277,30 +280,30 @@ export function setupOverlay(doc?: Document): () => void {
   const throttledPointer = rafThrottle(handlePointer);
 
   const listeners: Listener[] = [
-    [resolvedDoc, 'pointerover', throttledPointer, { capture: true }],
-    [resolvedDoc, 'pointermove', throttledPointer, { capture: true }],
-    [resolvedDoc, 'pointerleave', handlePointerLeave, { capture: true }],
-    [resolvedDoc, 'click', handleClick, { capture: true }],
-    [resolvedDoc, 'focusin', handleFocusIn, { capture: true }],
-    [resolvedDoc, 'focusout', handleFocusOut, { capture: true }],
-    [resolvedDoc, 'keydown', handleKeyDown, { capture: true }]
+    { target: resolvedDoc, type: 'pointerover', handler: throttledPointer, options: { capture: true } },
+    { target: resolvedDoc, type: 'pointermove', handler: throttledPointer, options: { capture: true } },
+    { target: resolvedDoc, type: 'pointerleave', handler: handlePointerLeave, options: { capture: true } },
+    { target: resolvedDoc, type: 'click', handler: handleClick, options: { capture: true } },
+    { target: resolvedDoc, type: 'focusin', handler: handleFocusIn, options: { capture: true } },
+    { target: resolvedDoc, type: 'focusout', handler: handleFocusOut, options: { capture: true } },
+    { target: resolvedDoc, type: 'keydown', handler: handleKeyDown, options: { capture: true } }
   ];
 
   if (view) {
-    listeners.push([view, 'scroll', refresh, { capture: true, passive: true }]);
-    listeners.push([resolvedDoc, 'scroll', refresh, { capture: true, passive: true }]);
-    listeners.push([view, 'resize', refresh, { capture: true, passive: true }]);
+    listeners.push({ target: view, type: 'scroll', handler: refresh, options: { capture: true, passive: true } });
+    listeners.push({ target: resolvedDoc, type: 'scroll', handler: refresh, options: { capture: true, passive: true } });
+    listeners.push({ target: view, type: 'resize', handler: refresh, options: { capture: true, passive: true } });
   } else {
-    listeners.push([resolvedDoc, 'scroll', refresh, { capture: true }]);
+    listeners.push({ target: resolvedDoc, type: 'scroll', handler: refresh, options: { capture: true } });
   }
 
-  listeners.forEach(([target, type, handler, options]) => {
-    target.addEventListener(type, handler as EventListenerOrEventListenerObject, options ?? false);
+  listeners.forEach(({ target, type, handler, options }) => {
+    target.addEventListener(type, handler, options ?? false);
   });
 
   return () => {
-    listeners.forEach(([target, type, handler, options]) => {
-      target.removeEventListener(type, handler as EventListenerOrEventListenerObject, options ?? false);
+    listeners.forEach(({ target, type, handler, options }) => {
+      target.removeEventListener(type, handler, options ?? false);
     });
     if (resizeObserver) {
       resizeObserver.disconnect();
