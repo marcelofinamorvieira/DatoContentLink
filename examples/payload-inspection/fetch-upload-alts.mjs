@@ -2,11 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { config } from 'dotenv';
-import {
-  decodeStega,
-  stripDatoImageAlt,
-  withContentLinkHeaders
-} from '../../dist/index.js';
+import { decodeStega, stripStega, withContentLinkHeaders } from '../../dist/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -85,16 +81,7 @@ const decodedAlts = uploads
     if (!decoded) {
       return null;
     }
-    const cleanedAlt = stripDatoImageAlt(alt);
-    const origin = decoded.editUrl
-      ? (() => {
-          try {
-            return new URL(decoded.editUrl).origin;
-          } catch {
-            return null;
-          }
-        })()
-      : null;
+    const cleanedAlt = stripStega(alt);
     return {
       uploadId: upload.id,
       title: upload.title ?? null,

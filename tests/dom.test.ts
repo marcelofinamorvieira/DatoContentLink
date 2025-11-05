@@ -1,16 +1,15 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as stega from '@vercel/stega';
-import {
-  enableDatoVisualEditing,
-  ATTR_EDIT_URL,
-  ATTR_ITEM_ID,
-  ATTR_ENV,
-  ATTR_LOCALE,
-  ATTR_GENERATED
-} from '../src/index.js';
+import { enableDatoVisualEditing } from '../src/index.js';
 import * as decodeModule from '../src/decode/stega.js';
 
 const { vercelStegaCombine } = stega;
+
+const ATTR_EDIT_URL = 'data-datocms-edit-url';
+const ATTR_ITEM_ID = 'data-datocms-item-id';
+const ATTR_ENV = 'data-datocms-env';
+const ATTR_LOCALE = 'data-datocms-locale';
+const ATTR_GENERATED = 'data-datocms-generated';
 
 const createRect = (x: number, y: number, width: number, height: number): DOMRect =>
   ({

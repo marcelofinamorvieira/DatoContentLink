@@ -1,6 +1,6 @@
+import React from 'react';
 import { draftMode } from 'next/headers';
 import { PreviewVisualEditing } from '../components/PreviewVisualEditing';
-import { DatoAutoClean } from 'datocms-visual-editing/react';
 import { datoQuery } from '../lib/datoClient';
 
 const HOME_QUERY = `
@@ -43,10 +43,8 @@ export default async function Page() {
         <PreviewVisualEditing baseEditingUrl={baseEditingUrl} environment="staging" />
       )}
 
-      <DatoAutoClean
-        as="article"
+      <article
         className="rounded-xl border border-zinc-200 p-6 shadow-sm"
-        options={{ delayMs: 32 }}
         data-datocms-edit-target
       >
         <h1 className="text-3xl font-semibold">{data.homePage?.title ?? 'Untitled'}</h1>
@@ -60,7 +58,7 @@ export default async function Page() {
             height={675}
           />
         )}
-      </DatoAutoClean>
+      </article>
     </main>
   );
 }

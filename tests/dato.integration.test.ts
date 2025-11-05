@@ -1,13 +1,7 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { vercelStegaDecode, vercelStegaSplit } from '@vercel/stega';
 
-import {
-  enableDatoVisualEditing,
-  ATTR_EDIT_URL,
-  ATTR_ITEM_ID,
-  ATTR_ITEM_TYPE_ID,
-  ATTR_GENERATED
-} from '../src/index.js';
+import { enableDatoVisualEditing } from '../src/index.js';
 import { withContentLinkHeaders } from '../src/net/withContentLinkHeaders.js';
 import { stripStega } from '../src/decode/stega.js';
 import { buildDatoDeepLink } from '../src/link/buildDatoDeepLink.js';
@@ -18,6 +12,11 @@ const BASE_EDITING_URL = process.env.DATOCMS_VISUAL_EDITING_BASE_URL;
 const GRAPHQL_ENDPOINT = process.env.DATOCMS_VISUAL_EDITING_GRAPHQL_URL ?? 'https://graphql.datocms.com/preview';
 
 const ZERO_WIDTH_REGEX = /[\u200B-\u200F\u202A-\u202E\u2060-\u206F]/;
+
+const ATTR_EDIT_URL = 'data-datocms-edit-url';
+const ATTR_ITEM_ID = 'data-datocms-item-id';
+const ATTR_ITEM_TYPE_ID = 'data-datocms-item-type-id';
+const ATTR_GENERATED = 'data-datocms-generated';
 
 if (typeof Document === 'undefined' && typeof window !== 'undefined' && window?.Document) {
   // eslint-disable-next-line no-eval
@@ -94,7 +93,9 @@ integrationDescribe('DatoCMS preview integration', () => {
     }
     if (typeof globalThis.Document === 'undefined') {
       // Ensure the global Document constructor exists for code paths that rely on it.
-      globalThis.Document = (globalThis.window as typeof window | undefined)?.Document ?? document.constructor;
+      globalThis.Document =
+        ((globalThis.window as typeof window | undefined)?.Document ??
+          (document.constructor as typeof Document)) as typeof Document;
     }
 
     const fetchDato = withContentLinkHeaders(fetch, baseEditingUrl);
@@ -208,11 +209,14 @@ function parseDatoHref(href: string) {
     const split = vercelStegaSplit(heroSection.heroTitle);
     expect(split.encoded).toBeDefined();
 
-    const decoded = vercelStegaDecode(split.encoded ?? '');
-    expect(typeof decoded).toBe('object');
+    const decoded = vercelStegaDecode(split.encoded ?? '') as { href?: string } | null;
     expect(decoded && typeof decoded.href === 'string').toBe(true);
+    if (!decoded || typeof decoded.href !== 'string') {
+      throw new Error('Decoded payload is missing href metadata.');
+    }
 
-    const { itemTypeId, itemId, fieldPath } = parseDatoHref(decoded.href);
+    const href = decoded.href;
+    const { itemTypeId, itemId, fieldPath } = parseDatoHref(href);
     expect(itemId).toBe(previewHome.id);
     expect(itemTypeId).toBeDefined();
     expect(fieldPath).toContain('hero_title');
@@ -224,7 +228,7 @@ function parseDatoHref(href: string) {
       fieldPath,
       environment: null,
       locale: null,
-      editUrl: decoded.href,
+      editUrl: href,
       raw: decoded
     };
 

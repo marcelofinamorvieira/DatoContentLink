@@ -1,5 +1,6 @@
+import React from 'react';
 import Image, { type ImageProps } from 'next/image';
-import { withDatoImageAlt } from 'datocms-visual-editing';
+import { decodeStega, stripStega } from 'datocms-visual-editing';
 
 type VisualImageProps = ImageProps & {
   datoEditUrl?: string;
@@ -10,7 +11,8 @@ type VisualImageProps = ImageProps & {
  */
 export function DatoImage(props: VisualImageProps) {
   const { alt, ...rest } = props;
-  const { cleanedAlt, editInfo } = withDatoImageAlt(alt);
+  const cleanedAlt = typeof alt === 'string' ? stripStega(alt) : alt ?? '';
+  const editInfo = typeof alt === 'string' ? decodeStega(alt) : null;
 
   return (
     <Image
@@ -28,7 +30,7 @@ export function DatoImage(props: VisualImageProps) {
  * Development helper: surface a subtle badge next to the image that jumps to the editor.
  */
 export function DatoImageDebugBadge({ alt }: { alt: string }) {
-  const { editInfo } = withDatoImageAlt(alt);
+  const editInfo = decodeStega(alt);
   if (!editInfo || process.env.NODE_ENV === 'production') {
     return null;
   }

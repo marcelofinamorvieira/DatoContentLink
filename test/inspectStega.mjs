@@ -3,7 +3,6 @@ import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { config } from 'dotenv';
 import { withContentLinkHeaders, decodeStega, stripStega } from '../dist/index.js';
-import { buildDatoDeepLink } from '../dist/link/buildDatoDeepLink.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ENV_FILES = [
@@ -223,16 +222,7 @@ async function main() {
       const decoded = decodeStega(item.value);
       if (decoded) {
         const cleaned = stripStega(item.value);
-        const url = (() => {
-          if (decoded.editUrl) {
-            return decoded.editUrl;
-          }
-          try {
-            return buildDatoDeepLink(decoded, BASE_EDITING_URL);
-          } catch (error) {
-            return 'Unable to build URL';
-          }
-        })();
+        const url = decoded.editUrl ?? 'N/A';
         results.push({
           field: field.name,
           path: item.path,

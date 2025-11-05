@@ -105,18 +105,6 @@ nearest wrapper so the overlay remains clickable.
 
 ---
 
-### Managing image alt metadata
-
-DatoCMS appends the same steganographic payload to the `alt` value of every referenced upload ([docs](https://www.datocms.com/docs/content-link/how-to-use-content-link)). When the library runs it strips those zero-width markers automatically, but render pipelines that bypass the DOM (Next.js `Image`, RSS feeds, image CDNs, etc.) may need to clean the string themselves. Use the new helpers to cover those scenarios:
-
-- `stripDatoImageAlt(alt)` – remove markers while keeping the visible label intact.
-- `decodeDatoImageAlt(alt)` – produce the same `DecodedInfo` payload used by the overlay.
-- `withDatoImageAlt(alt)` – get `{ cleanedAlt, editInfo }` in one call so you can forward both values to components or analytics.
-
-If you already rely on `enableDatoAutoClean` or `useDatoAutoClean`, pass `{ cleanImageAlts: false, observeImageAlts: false }` to disable DOM-level scrubbing and delegate the work to these helpers instead.
-
----
-
 ## API Reference
 
 ### `enableDatoVisualEditing(options): VisualEditingController`
@@ -150,14 +138,9 @@ Returns a controller with the following methods:
 
 Provide a `resolveEditUrl` callback when you want to rewrite or filter linking behaviour on a per-node basis (for example, to send certain payloads to custom dashboards). Return `null` from the callback to skip stamping a given element entirely.
 
-Lifecycle callbacks receive a `MarkSummary` object (`editableTotal`, `generatedStamped`, `generatedUpdated`, `explicitTotal`, and the processed `scope`). The same payload is dispatched as DOM `CustomEvent`s:
+Lifecycle callbacks receive a `MarkSummary` object (`editableTotal`, `generatedStamped`, `generatedUpdated`, `explicitTotal`, and the processed `scope`). The same payload is dispatched as DOM `CustomEvent`s named `datocms:visual-editing:ready`, `datocms:visual-editing:marked`, `datocms:visual-editing:state`, and `datocms:visual-editing:warn`.
 
-- `datocms:visual-editing:ready` (exported as `EVENT_READY`)
-- `datocms:visual-editing:marked` (exported as `EVENT_MARKED`)
-- `datocms:visual-editing:state` (exported as `EVENT_STATE`)
-- `datocms:visual-editing:warn` (exported as `EVENT_WARN`)
-
-Warnings fire only in development (for example when enable() finds zero editables) and surface through both the `onWarning` callback and the DOM event.
+Warnings fire only in development (for example when `enable()` finds zero editables) and surface through both the `onWarning` callback and the DOM event.
 
 ### Debug inspection toggle
 
@@ -174,35 +157,25 @@ These attributes make it easy to inspect the resolved editing info directly in D
 
 - Set `devPanel: true` (or `{ position: 'tr' | 'tl' | 'br' | 'bl' }`) to spawn a lightweight overlay with live counters while developing.
 - Use `checkStegaState(root?)` to get programmatic insight into editable totals, generated vs. explicit counts, info-only attributes, and leftover encoded markers.
-- Drop the `DatoVisualEditingDevPanel` React component anywhere inside your preview shell to render the same diagnostics using JSX.
 - Need to audit raw payloads? Check `examples/payload-inspection/` for ready-to-run Node scripts that log the decoded stega metadata for uploads and hero sections.
 
 ### `withContentLinkHeaders(fetchLike)`
 
 Wraps `fetch` (or a compatible function) so every request sends the headers required by DatoCMS to embed visual editing metadata.
 
-### `autoCleanStegaWithin(root, options)` / `enableDatoAutoClean(selector, options)`
+### `enableDatoAutoClean(selector, options)`
 
-Utility helpers to scrub stega markers from a subtree on demand. They complement the automatic cleanup performed by
-`enableDatoVisualEditing` and remain useful if you want to clean additional regions outside the visual editing scope.
-Set `cleanImageAlts: false` to leave `<img alt>` values untouched and `observeImageAlts: false` to stop watching for `alt`
-mutations when you intend to handle them yourself.
+Run the same cleanup that powers the runtime on any DOM subtree. Pass a CSS selector (or `HTMLElement`) to keep those nodes clear of stega payloads without enabling overlays. Options let you disable image cleanup (`cleanImageAlts: false`) or observation (`observeImageAlts: false`) when you want one-off scrubbing.
 
 ### React helpers
 
-- `useDatoAutoClean(ref, options)` – React hook that runs `autoCleanStegaWithin`.
-- `DatoAutoClean` – minimal component that stamps `data-datocms-auto-clean` and wires the hook for you.
 - `useDatoVisualEditingListen(subscribe, options)` – keeps overlays in sync with Dato “Listen” subscriptions (streaming / SSE preview updates).
-- `DatoVisualEditingDevPanel` – React counterpart of the dev panel for JSX-based preview shells.
 
 ### Low-level utilities
 
 - `decodeStega(string)` / `stripStega(string)` – stega helpers re-exported for convenience.
-- `stripDatoImageAlt(alt)` / `decodeDatoImageAlt(alt)` / `withDatoImageAlt(alt)` – image-specific helpers for render pipelines that do not pass through the DOM auto-cleaner.
 - `buildEditTagAttributes(info, format)` – build explicit attributes if you want to hand-stamp elements server-side. Defaults to the URL-only format; pass `'json'` or `'attrs'` to include metadata payloads.
 - `getDatoEditInfo(element)` – read explicit attributes or JSON payloads from markup you crafted yourself.
-
-All attribute names are exported from `datocms-visual-editing/constants` as `ATTR_*` constants.
 
 ---
 
