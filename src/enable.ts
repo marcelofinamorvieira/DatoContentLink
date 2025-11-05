@@ -7,7 +7,6 @@ import { markDOMFromStega, defaultResolveEditUrl } from './stega/markFromStega.j
 import { clearGeneratedAttributes } from './dom/stamp.js';
 import { annotateExplicitTargetsForDebug } from './dom/annotateDebug.js';
 import { setupOverlay } from './overlay/index.js';
-import { setupDevPanel } from './debug/devPanel.js';
 import { checkStegaState } from './utils/state.js';
 import { normalizeBaseUrl } from './utils/url.js';
 import { resolveDocument } from './utils/dom.js';
@@ -21,8 +20,6 @@ import {
 import type {
   EnableDatoVisualEditingOptions,
   VisualEditingController,
-  VisualEditingEvents,
-  DevPanelOption,
   MarkSummary,
   VisualEditingState,
   VisualEditingWarning
@@ -68,13 +65,10 @@ class VisualEditingControllerImpl implements VisualEditingController {
   private readonly doc: Document;
   private readonly pending = new Set<ParentNode>();
   private readonly scheduleMark: () => void;
-  private readonly callbacks: VisualEditingEvents;
   private readonly isDev: boolean;
-  private readonly devPanelOption: DevPanelOption | undefined;
 
   private observer: MutationObserver | null = null;
   private disposeOverlay: (() => void) | null = null;
-  private disposeDevPanel: (() => void) | null = null;
   private enabled = false;
   private disposed = false;
   private readyEmitted = false;
@@ -92,8 +86,6 @@ class VisualEditingControllerImpl implements VisualEditingController {
 
     this.context = this.buildContext(options, baseEditingUrl, resolveEditUrl);
     this.scheduleMark = createScheduler(() => this.runMark());
-    this.callbacks = this.extractCallbacks(options);
-    this.devPanelOption = options.devPanel;
     this.isDev = isDevelopment();
   }
 
@@ -123,15 +115,6 @@ class VisualEditingControllerImpl implements VisualEditingController {
       root: this.root,
       debug: options.debug ?? false,
       resolveEditUrl
-    };
-  }
-
-  private extractCallbacks(options: EnableDatoVisualEditingOptions): VisualEditingEvents {
-    return {
-      onReady: options.onReady,
-      onMarked: options.onMarked,
-      onStateChange: options.onStateChange,
-      onWarning: options.onWarning
     };
   }
 
@@ -227,16 +210,6 @@ class VisualEditingControllerImpl implements VisualEditingController {
       attributeFilter: ['alt']
     });
     this.disposeOverlay = setupOverlay(this.doc);
-    if (this.shouldShowDevPanel() && !this.disposeDevPanel) {
-      const panelOptions =
-        typeof this.devPanelOption === 'object' && this.devPanelOption ? this.devPanelOption : undefined;
-      this.disposeDevPanel = setupDevPanel(
-        this.doc,
-        () => ({ enabled: this.enabled, disposed: this.disposed }),
-        (root?: ParentNode) => checkStegaState(root ?? this.root),
-        panelOptions
-      );
-    }
   }
 
   /** Reverse everything created in `attach`, leaving the DOM untouched. */
@@ -249,15 +222,6 @@ class VisualEditingControllerImpl implements VisualEditingController {
       this.disposeOverlay();
       this.disposeOverlay = null;
     }
-    if (this.disposeDevPanel) {
-      this.disposeDevPanel();
-      this.disposeDevPanel = null;
-    }
-  }
-
-  /** Only render the dev panel when opted-in and running in a dev build. */
-  private shouldShowDevPanel(): boolean {
-    return Boolean(this.devPanelOption) && this.isDev;
   }
 
   /**
@@ -353,11 +317,11 @@ class VisualEditingControllerImpl implements VisualEditingController {
    * editable nodes at the root (a common hydration gotcha).
    */
   private handleMarkResult(summary: MarkSummary): void {
-    this.emit(EVENT_MARKED, this.callbacks.onMarked, summary);
+    this.dispatch(EVENT_MARKED, summary);
 
     if (!this.readyEmitted) {
       this.readyEmitted = true;
-      this.emit(EVENT_READY, this.callbacks.onReady, summary);
+      this.dispatch(EVENT_READY, summary);
     }
 
     if (
@@ -376,7 +340,7 @@ class VisualEditingControllerImpl implements VisualEditingController {
         code: 'no-editables',
         message
       };
-      this.emit(EVENT_WARN, this.callbacks.onWarning, warning);
+      this.dispatch(EVENT_WARN, warning);
     }
   }
 
@@ -386,26 +350,14 @@ class VisualEditingControllerImpl implements VisualEditingController {
       enabled: this.enabled,
       disposed: this.disposed
     };
-    this.emit(EVENT_STATE, this.callbacks.onStateChange, state);
+    this.dispatch(EVENT_STATE, state);
   }
 
   /**
-   * Invoke the user callback and dispatch a CustomEvent when possible so
-   * non-JS integrations can observe lifecycle changes.
+   * Dispatch a CustomEvent when possible so non-JS integrations can observe
+   * lifecycle changes.
    */
-  private emit<T>(
-    type: string,
-    callback: ((payload: T) => void) | undefined,
-    payload: T
-  ): void {
-    try {
-      callback?.(payload);
-    } catch (error) {
-      if (this.isDev) {
-        console.error('[datocms-visual-editing] listener for', type, 'threw', error);
-      }
-    }
-
+  private dispatch<T>(type: string, payload: T): void {
     const CustomEventCtor =
       this.doc.defaultView?.CustomEvent ?? (typeof CustomEvent !== 'undefined' ? CustomEvent : undefined);
     if (!CustomEventCtor) {

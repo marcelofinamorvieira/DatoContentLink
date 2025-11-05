@@ -116,14 +116,7 @@ type EnableDatoVisualEditingOptions = {
   root?: ParentNode;        // restrict scanning/observation to a subtree (default: document)
   debug?: boolean;          // expose debug attributes for in-browser inspection (default: false)
   autoEnable?: boolean;     // set to false when you want manual enable/disable control (default: true)
-  devPanel?: boolean | {    // show a floating dev counter panel in dev builds
-    position?: 'br' | 'bl' | 'tr' | 'tl';
-  };
   resolveEditUrl?: (info: DecodedInfo, ctx: { baseEditingUrl: string; environment?: string }) => string | null;
-  onReady?: (summary: MarkSummary) => void;
-  onMarked?: (summary: MarkSummary) => void;
-  onStateChange?: (state: { enabled: boolean; disposed: boolean }) => void;
-  onWarning?: (warning: { code: string; message: string }) => void;
 };
 ```
 
@@ -138,9 +131,15 @@ Returns a controller with the following methods:
 
 Provide a `resolveEditUrl` callback when you want to rewrite or filter linking behaviour on a per-node basis (for example, to send certain payloads to custom dashboards). Return `null` from the callback to skip stamping a given element entirely.
 
-Lifecycle callbacks receive a `MarkSummary` object (`editableTotal`, `generatedStamped`, `generatedUpdated`, `explicitTotal`, and the processed `scope`). The same payload is dispatched as DOM `CustomEvent`s named `datocms:visual-editing:ready`, `datocms:visual-editing:marked`, `datocms:visual-editing:state`, and `datocms:visual-editing:warn`.
+Lifecycle updates are dispatched as DOM `CustomEvent`s on `document`. Each event carries a `MarkSummary` payload (`editableTotal`, `generatedStamped`, `generatedUpdated`, `explicitTotal`, and the processed `scope`). Listen with:
 
-Warnings fire only in development (for example when `enable()` finds zero editables) and surface through both the `onWarning` callback and the DOM event.
+```ts
+document.addEventListener('datocms:visual-editing:ready', (event) => {
+  console.log('ready', event.detail);
+});
+```
+
+Event names: `datocms:visual-editing:ready`, `datocms:visual-editing:marked`, `datocms:visual-editing:state`, and `datocms:visual-editing:warn`. Warnings fire only in development (for example when `enable()` finds zero editables).
 
 ### Debug inspection toggle
 
@@ -153,9 +152,8 @@ Pass `debug: true` to stamp additional diagnostics on every editable element and
 
 These attributes make it easy to inspect the resolved editing info directly in DevTools. They are removed automatically when you call `dispose()` on the controller returned by `enableDatoVisualEditing`.
 
-### Dev panel & state inspectors
+### State inspectors
 
-- Set `devPanel: true` (or `{ position: 'tr' | 'tl' | 'br' | 'bl' }`) to spawn a lightweight overlay with live counters while developing.
 - Use `checkStegaState(root?)` to get programmatic insight into editable totals, generated vs. explicit counts, info-only attributes, and leftover encoded markers.
 - Need to audit raw payloads? Check [examples/payload-inspection](./examples/payload-inspection/) for ready-to-run Node scripts that log the decoded stega metadata for uploads and hero sections.
 
@@ -170,6 +168,8 @@ Run the same cleanup that powers the runtime on any DOM subtree. Pass a CSS sele
 ### React helpers
 
 - `useDatoVisualEditingListen(subscribe, options)` – keeps overlays in sync with Dato “Listen” subscriptions (streaming / SSE preview updates).
+
+Note: Use this hook when your preview consumes DatoCMS [Real‑time Updates API](https://www.datocms.com/docs/real-time-updates-api) (Listen/SSE). If you only fetch one‑off snapshots from the [Content Delivery API](https://www.datocms.com/docs/content-delivery-api), skip the hook; `enableDatoVisualEditing` is sufficient, and you can manually call `controller.refresh(root?)` after your UI updates.
 
 React example (Listen/stream updates):
 

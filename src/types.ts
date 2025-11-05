@@ -27,19 +27,6 @@ export type VisualEditingWarning = {
   message: string;
 };
 
-export type VisualEditingEvents = {
-  onReady?: (summary: MarkSummary) => void;
-  onMarked?: (summary: MarkSummary) => void;
-  onStateChange?: (state: VisualEditingState) => void;
-  onWarning?: (warning: VisualEditingWarning) => void;
-};
-
-export type DevPanelOption =
-  | boolean
-  | {
-      position?: 'br' | 'bl' | 'tr' | 'tl';
-    };
-
 export type EnableDatoVisualEditingOptions = {
   baseEditingUrl: string;
   environment?: string;
@@ -55,16 +42,12 @@ export type EnableDatoVisualEditingOptions = {
    */
   autoEnable?: boolean;
   /**
-   * Render a floating development panel with live counters (development only).
-   */
-  devPanel?: DevPanelOption;
-  /**
    * Customize how the clickable overlay URL is resolved.
    * Receives the decoded stega payload and should return the URL to open.
    * Return null to skip stamping for that payload.
    */
   resolveEditUrl?: (info: DecodedInfo, context: { baseEditingUrl: string; environment?: string }) => string | null;
-} & VisualEditingEvents;
+};
 
 export type VisualEditingController = {
   enable(): void;

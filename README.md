@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/datocms-visual-editing.svg)](https://www.npmjs.com/package/datocms-visual-editing) [![License: MIT](https://img.shields.io/npm/l/datocms-visual-editing.svg)](./LICENSE)
 
-Click-to-edit overlays for DatoCMS preview content — no Vercel toolbar.
+Click-to-edit overlays for DatoCMS projects. Platform and framework agnostic, two function calls to set it up.
 
 ![Usage demo](./docs/usage.gif)
 
@@ -45,6 +45,8 @@ document.getElementById('toggle-visual-editing')?.addEventListener('click', () =
 
 ## React (streaming / Listen)
 
+Use this only if your preview receives real-time updates via DatoCMS [Real‑time Updates API](https://www.datocms.com/docs/real-time-updates-api). If you render a static snapshot from the [Content Delivery API](https://www.datocms.com/docs/content-delivery-api), you can skip this hook; `enableDatoVisualEditing` alone will show overlays on first render, but there will be no live re-scan.
+
 ```tsx
 'use client';
 import { useRef } from 'react';
@@ -74,9 +76,17 @@ export function PreviewVisualEditing() {
 - `root` (optional): limit scanning/observation to a subtree.
 - `debug` (false): add debug attributes for inspection.
 - `autoEnable` (true): set false for manual enable/disable.
-- `devPanel` (false | { position }): floating dev counters in dev.
 - `resolveEditUrl(info, ctx)`: rewrite/skip links (return null to skip).
-- Callbacks: `onReady`, `onMarked`, `onStateChange`, `onWarning`.
+
+Lifecycle updates fire CustomEvents on `document`:
+
+```ts
+document.addEventListener('datocms:visual-editing:ready', (event) => {
+  console.log('ready', event.detail); // MarkSummary payload
+});
+```
+
+Other events: `datocms:visual-editing:marked`, `datocms:visual-editing:state`, `datocms:visual-editing:warn`.
 
 ## Troubleshooting
 

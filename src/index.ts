@@ -8,8 +8,7 @@ export type {
   VisualEditingController,
   MarkSummary,
   VisualEditingState,
-  VisualEditingWarning,
-  DevPanelOption
+  VisualEditingWarning
 } from './types.js';
 export type { DecodedInfo } from './decode/types.js';
 export { buildEditTagAttributes } from './utils/tags.js';
