@@ -335,26 +335,15 @@ React example:
 import { buildEditTagAttributes } from 'datocms-visual-editing';
 import { StructuredText } from 'react-datocms/structured-text';
 
-type Props = {
-  page: { _editingUrl?: string | null; content: { value: unknown } };
-  locale: string;
-};
-
-export function LegalContent({ page, locale }: Props) {
-  const editingUrl = page?._editingUrl ?? null;
-  const wrapperProps = editingUrl
-    ? {
-        ...buildEditTagAttributes({ _editingUrl: editingUrl, fieldPath: 'content', locale }),
-        'data-datocms-edit-target': ''
-      }
-    : undefined;
+export function Content({ editingUrl, content, locale }) {
+  const attrs = editingUrl
+    ? buildEditTagAttributes({ _editingUrl: editingUrl, fieldPath: 'content', locale })
+    : {};
 
   return (
-    <section>
-      <div {...(wrapperProps ?? {})}>
-        <StructuredText data={page.content.value as any} />
-      </div>
-    </section>
+    <div {...attrs} data-datocms-edit-target>
+      <StructuredText data={content} />
+    </div>
   );
 }
 ```
