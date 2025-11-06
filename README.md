@@ -121,24 +121,32 @@ export function PreviewVisualEditing() {
 ### enableDatoVisualEditing(options): VisualEditingController
 
 ```ts
-type EnableDatoVisualEditingOptions = {
-  baseEditingUrl: string;   // required
-  environment?: string;     // optional environment slug for deep links
-  root?: ParentNode;        // limit scanning/observation to a subtree (default: document)
-  debug?: boolean;          // expose debug attributes for inspection (default: false)
-  autoEnable?: boolean;     // manually enable/disable when false (default: true)
-  resolveEditUrl?: (info: DecodedInfo, ctx: { baseEditingUrl: string; environment?: string }) => string | null;
-};
+import { enableDatoVisualEditing } from 'datocms-visual-editing';
 
-type VisualEditingController = {
-  enable(): void;
-  disable(): void;
-  toggle(): void;
-  dispose(): void;
-  isEnabled(): boolean;
-  isDisposed(): boolean;
-  refresh(root?: ParentNode): void;
-};
+// Minimal
+const controller = enableDatoVisualEditing({
+  baseEditingUrl: 'https://acme.admin.datocms.com'
+});
+
+// Common options
+const controller2 = enableDatoVisualEditing({
+  baseEditingUrl: 'https://acme.admin.datocms.com',
+  environment: 'main',
+  root: document, // or a ShadowRoot / container element
+  debug: false,
+  autoEnable: true,
+  resolveEditUrl: (info, { baseEditingUrl }) => {
+    // Customize or filter per payload; return null to skip stamping
+    return info.editUrl ?? `${baseEditingUrl}/items/${info.itemId}`;
+  }
+});
+
+// Control & refresh
+controller2.disable();
+controller2.enable();
+controller2.toggle();
+controller2.refresh(); // or controller2.refresh(someSubtree)
+controller2.dispose();
 ```
 
 Returns a controller to manage overlays and rescans.
@@ -146,10 +154,20 @@ Returns a controller to manage overlays and rescans.
 ### withContentLinkHeaders(fetchLike, baseEditingUrl)
 
 ```ts
-function withContentLinkHeaders(
-  fetchImpl?: typeof fetch,
-  baseEditingUrl: string
-): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+import { withContentLinkHeaders } from 'datocms-visual-editing';
+
+const fetchDato = withContentLinkHeaders(fetch, 'https://acme.admin.datocms.com');
+
+// Use like fetch
+const res = await fetchDato('https://graphql.datocms.com/', {
+  method: 'POST',
+  headers: { Authorization: `Bearer ${process.env.DATO_PREVIEW_API_TOKEN}` },
+  body: JSON.stringify({ query })
+});
+
+// Works with Request too
+const req = new Request('https://graphql.datocms.com/', { method: 'POST' });
+const res2 = await fetchDato(req, { body: JSON.stringify({ query }) });
 ```
 
 Wraps `fetch` to send `X-Visual-Editing: vercel-v1` and `X-Base-Editing-Url: <normalized>` on every request.
@@ -157,18 +175,18 @@ Wraps `fetch` to send `X-Visual-Editing: vercel-v1` and `X-Base-Editing-Url: <no
 ### enableDatoAutoClean(selector?, options?): () => void
 
 ```ts
-type AutoCleanOptions = {
-  delayMs?: number;
-  observe?: boolean;
-  cleanImageAlts?: boolean;
-  observeImageAlts?: boolean;
-  skipSelectors?: string[];
-};
+import { enableDatoAutoClean } from 'datocms-visual-editing';
 
-function enableDatoAutoClean(
-  selector?: string,
-  options?: Omit<AutoCleanOptions, 'observe'>
-): () => void;
+// Clean any subtree(s) marked in the DOM
+const disposeClean = enableDatoAutoClean('[data-datocms-auto-clean]', {
+  delayMs: 32,
+  cleanImageAlts: true,
+  observeImageAlts: true,
+  skipSelectors: ['[contenteditable="true"]']
+});
+
+// Later
+disposeClean();
 ```
 
 Scrubs stega payloads from a DOM subtree without enabling overlays. Returns a disposer to stop observers/timers.
@@ -184,19 +202,27 @@ Scrubs stega payloads from a DOM subtree without enabling overlays. Returns a di
 ### Manual attribute helpers
 
 ```ts
-type EditTagInfo = {
-  itemId?: string;
-  itemTypeId?: string;
-  fieldPath?: string | Array<string | number>;
-  environment?: string;
-  locale?: string;
-  editUrl?: string;
-  _editingUrl?: string;
-};
-type EditTagFormat = 'url' | 'json' | 'attrs';
+import { buildEditTagAttributes, getDatoEditInfo } from 'datocms-visual-editing';
 
-function buildEditTagAttributes(info: EditTagInfo, format?: EditTagFormat): Record<string, string>;
-function getDatoEditInfo(element: Element): DecodedInfo | null;
+// Server-side or prerender step
+const attrs = buildEditTagAttributes(
+  {
+    itemId: '123',
+    itemTypeId: '456',
+    environment: 'main',
+    locale: 'en',
+    editUrl: 'https://acme.admin.datocms.com/...'
+  },
+  'url' // or 'attrs' | 'json'
+);
+
+for (const [name, value] of Object.entries(attrs)) {
+  element.setAttribute(name, value);
+}
+
+// Later, read info back from an element
+const info = getDatoEditInfo(element);
+console.log(info?.itemId, info?.editUrl);
 ```
 
 Use `buildEditTagAttributes` to generate attributes server‑side; `getDatoEditInfo` reads metadata from an element (prefers explicit attributes, falls back to stega).
@@ -204,35 +230,34 @@ Use `buildEditTagAttributes` to generate attributes server‑side; `getDatoEditI
 ### Low‑level utilities
 
 ```ts
-function decodeStega(input: string): DecodedInfo | null;
-function stripStega(input: string): string;
+import { decodeStega, stripStega, checkStegaState } from 'datocms-visual-editing';
 
-type StegaState = {
-  scope: ParentNode;
-  editableTotal: number;
-  generatedTotal: number;
-  explicitTotal: number;
-  infoOnlyTotal: number;
-  encodedTextNodes: number;
-  encodedImageAlts: number;
-  samples: { editable?: string[]; infoOnly?: string[] };
-};
-function checkStegaState(root?: ParentNode): StegaState;
+// Decode a raw string that may contain stega
+const info = decodeStega(someString);
+
+// Remove stega characters for display
+const clean = stripStega(someString);
+
+// Inspect the current DOM footprint
+const state = checkStegaState(document);
+// { editableTotal, generatedTotal, explicitTotal, infoOnlyTotal, ... }
 ```
 
 ### React helper
 
-```ts
-import { useDatoVisualEditingListen, type UseDatoVisualEditingListenOptions, type ListenSubscribe } from 'datocms-visual-editing/react';
+```tsx
+import { useDatoVisualEditingListen } from 'datocms-visual-editing/react';
 
-type ListenSubscribe = (handlers: { onUpdate: () => void; onError?: (err: unknown) => void }) => () => void;
-type UseDatoVisualEditingListenOptions = {
-  controller?: VisualEditingController;
-  controllerOptions?: EnableDatoVisualEditingOptions;
-  scopeRef?: React.RefObject<ParentNode | null>;
-  initialRefresh?: boolean;
-  onError?: (err: unknown) => void;
-};
+useDatoVisualEditingListen(({ onUpdate }) => {
+  const sse = new EventSource('/api/dato/listen');
+  sse.onmessage = () => onUpdate();
+  return () => sse.close();
+}, {
+  controllerOptions: { baseEditingUrl: 'https://acme.admin.datocms.com', environment: 'main' },
+  scopeRef,          // optional DOM subtree to limit rescans
+  initialRefresh: true,
+  onError: (e) => console.error(e)
+});
 ```
 
 ## Advanced usage
