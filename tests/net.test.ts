@@ -2,11 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { withContentLinkHeaders } from '../src/net/withContentLinkHeaders.js';
 
 describe('withContentLinkHeaders', () => {
-  it('throws when X-Base-Editing-Url header is missing', async () => {
+  it('throws when baseEditingUrl is missing at call time', async () => {
     const mockFetch = vi.fn();
-    const fetchWithHeaders = withContentLinkHeaders(mockFetch as unknown as typeof fetch);
+    // Force an undefined base URL while satisfying TS signature
+    const fetchWithHeaders = withContentLinkHeaders(
+      mockFetch as unknown as typeof fetch,
+      undefined as unknown as string
+    );
 
-    await expect(fetchWithHeaders('https://example.com', {})).rejects.toThrow('X-Base-Editing-Url missing');
+    await expect(fetchWithHeaders('https://example.com', {})).rejects.toThrow('baseEditingUrl is required');
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
@@ -110,18 +114,22 @@ describe('withContentLinkHeaders', () => {
     expect(headers.get('X-Visual-Editing')).toBe('vercel-v1');
   });
 
-  it('accepts lowercase x-base-editing-url header without overriding', async () => {
+  it('overrides any provided x-base-editing-url header with the configured baseEditingUrl', async () => {
     const mockFetch = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
-    const fetchWithHeaders = withContentLinkHeaders(mockFetch as unknown as typeof fetch);
+    const defaultUrl = 'https://acme.admin.datocms.com';
+    const fetchWithHeaders = withContentLinkHeaders(
+      mockFetch as unknown as typeof fetch,
+      defaultUrl
+    );
 
     await fetchWithHeaders('https://example.com/graphql', {
-      headers: { 'x-base-editing-url': 'https://acme.admin.datocms.com' }
+      headers: { 'x-base-editing-url': 'https://other.admin.datocms.com' }
     });
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
     const [, callInit] = mockFetch.mock.calls[0] as [RequestInfo | URL, RequestInit];
     const headers = callInit.headers as Headers;
-    expect(headers.get('X-Base-Editing-Url')).toBe('https://acme.admin.datocms.com');
+    expect(headers.get('X-Base-Editing-Url')).toBe(defaultUrl);
   });
 
   it('preserves referrerPolicy when cloning Request inputs', async () => {

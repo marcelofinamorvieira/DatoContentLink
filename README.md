@@ -14,16 +14,34 @@ npm install datocms-visual-editing
 
 1) Fetch preview content with visual-editing headers
 
+You can set the headers manually with plain `fetch`:
+
+```ts
+const response = await fetch('https://graphql.datocms.com/', {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${process.env.DATO_PREVIEW_API_TOKEN}`,
+    'X-Visual-Editing': 'vercel-v1',
+    'X-Base-Editing-Url': 'https://acme.admin.datocms.com'
+  },
+  body: JSON.stringify({ query })
+});
+```
+
+Or use the helper to attach the headers automatically (recommended):
+
 ```ts
 import { withContentLinkHeaders } from 'datocms-visual-editing';
 
-const fetchDato = withContentLinkHeaders(fetch);
+const fetchDato = withContentLinkHeaders(
+  fetch,
+  'https://acme.admin.datocms.com'
+);
 
 const response = await fetchDato('https://graphql.datocms.com/', {
   method: 'POST',
   headers: {
-    Authorization: `Bearer ${process.env.DATO_PREVIEW_API_TOKEN}`,
-    'X-Base-Editing-Url': 'https://acme.admin.datocms.com'
+    Authorization: `Bearer ${process.env.DATO_PREVIEW_API_TOKEN}`
   },
   body: JSON.stringify({ query })
 });

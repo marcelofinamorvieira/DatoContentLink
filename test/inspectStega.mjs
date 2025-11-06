@@ -35,15 +35,14 @@ if (!BASE_EDITING_URL || !API_TOKEN) {
   process.exit(1);
 }
 
-const fetchDato = withContentLinkHeaders(fetch);
+const fetchDato = withContentLinkHeaders(fetch, BASE_EDITING_URL);
 
 async function fetchGraphQL(query, variables) {
   const response = await fetchDato('https://graphql.datocms.com/', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${API_TOKEN}`,
-      'X-Base-Editing-Url': BASE_EDITING_URL
+      Authorization: `Bearer ${API_TOKEN}`
     },
     body: JSON.stringify({ query, variables })
   });

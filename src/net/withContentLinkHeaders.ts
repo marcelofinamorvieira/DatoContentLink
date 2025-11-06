@@ -3,13 +3,19 @@
  * for DatoCMS visual editing (X-Visual-Editing + X-Base-Editing-Url). This
  * keeps preview queries lightweight for integrators.
  */
+import { normalizeBaseUrl } from '../utils/url.js';
+
 export function withContentLinkHeaders(
   fetchImpl: typeof fetch = fetch,
-  defaultBaseEditingUrl?: string
+  baseEditingUrl: string
 ) {
   return async (input: RequestInfo | URL, init: RequestInit = {}) => {
+    if (!baseEditingUrl) {
+      throw new Error('baseEditingUrl is required');
+    }
+
     const headers = cloneAndMergeHeaders(input, init);
-    ensureBaseEditingHeaders(headers, defaultBaseEditingUrl);
+    ensureBaseEditingHeaders(headers, baseEditingUrl);
 
     const finalInit = buildFinalInit(init, headers);
     copyReferrerPolicy(input, finalInit);
@@ -35,16 +41,10 @@ function cloneAndMergeHeaders(input: RequestInfo | URL, init: RequestInit): Head
   return headers;
 }
 
-function ensureBaseEditingHeaders(headers: Headers, defaultBaseEditingUrl?: string): void {
+function ensureBaseEditingHeaders(headers: Headers, baseEditingUrl: string): void {
   headers.set('X-Visual-Editing', 'vercel-v1');
-  let baseEditingUrl = headers.get('X-Base-Editing-Url') ?? headers.get('x-base-editing-url');
-  if (!baseEditingUrl && defaultBaseEditingUrl) {
-    headers.set('X-Base-Editing-Url', defaultBaseEditingUrl);
-    baseEditingUrl = defaultBaseEditingUrl;
-  }
-  if (!baseEditingUrl) {
-    throw new Error('X-Base-Editing-Url missing');
-  }
+  const normalized = normalizeBaseUrl(baseEditingUrl);
+  headers.set('X-Base-Editing-Url', normalized);
 }
 
 function buildFinalInit(init: RequestInit, headers: Headers): RequestInitWithDuplex {

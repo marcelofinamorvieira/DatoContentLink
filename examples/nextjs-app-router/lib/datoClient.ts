@@ -1,7 +1,5 @@
 import { withContentLinkHeaders } from 'datocms-visual-editing';
 
-const fetchWithHeaders = withContentLinkHeaders(fetch);
-
 export type DatoQueryArgs<TVariables extends Record<string, unknown>> = {
   query: string;
   variables?: TVariables;
@@ -33,12 +31,13 @@ export async function datoQuery<TData, TVariables extends Record<string, unknown
     throw new Error('NEXT_PUBLIC_DATO_BASE_EDITING_URL is required for visual editing');
   }
 
+  const fetchWithHeaders = withContentLinkHeaders(fetch, baseEditingUrl);
+
   const response = await fetchWithHeaders(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      'X-Base-Editing-Url': baseEditingUrl
+      Authorization: `Bearer ${token}`
     },
     body: JSON.stringify({ query, variables })
   });

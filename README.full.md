@@ -22,13 +22,15 @@ npm install datocms-visual-editing
    ```ts
    import { withContentLinkHeaders } from 'datocms-visual-editing';
 
-   const fetchDato = withContentLinkHeaders(fetch);
+   const fetchDato = withContentLinkHeaders(
+     fetch,
+     'https://acme.admin.datocms.com'
+   );
 
    const response = await fetchDato('https://graphql.datocms.com/', {
      method: 'POST',
      headers: {
-       Authorization: `Bearer ${process.env.DATO_PREVIEW_API_TOKEN}`,
-       'X-Base-Editing-Url': 'https://acme.admin.datocms.com'
+       Authorization: `Bearer ${process.env.DATO_PREVIEW_API_TOKEN}`
      },
      body: JSON.stringify({ query })
    });
@@ -178,9 +180,9 @@ These attributes make it easy to inspect the resolved editing info directly in D
 - Use `checkStegaState(root?)` to get programmatic insight into editable totals, generated vs. explicit counts, info-only attributes, and leftover encoded markers.
 - Need to audit raw payloads? Check [examples/payload-inspection](./examples/payload-inspection/) for ready-to-run Node scripts that log the decoded stega metadata for uploads and hero sections.
 
-### `withContentLinkHeaders(fetchLike)`
+### `withContentLinkHeaders(fetchLike, baseEditingUrl)`
 
-Wraps `fetch` (or a compatible function) so every request sends the headers required by DatoCMS to embed visual editing metadata.
+Wraps `fetch` (or a compatible function) so every request sends the headers required by DatoCMS to embed visual editing metadata. The `baseEditingUrl` is mandatory and will be applied to all requests.
 
 ### `enableDatoAutoClean(selector, options)`
 
