@@ -28,24 +28,7 @@ const response = await fetch('https://graphql.datocms.com/', {
 });
 ```
 
-Or use [`@datocms/cda-client`](https://github.com/datocms/cda-client) to have the
-Content Delivery client build the headers for you:
-
-```ts
-import { buildRequestHeaders } from '@datocms/cda-client';
-
-const headers = buildRequestHeaders({
-  token: process.env.DATO_PREVIEW_API_TOKEN!,
-  baseEditingUrl: 'https://acme.admin.datocms.com',
-  visualEditing: 'vercel-v1'
-});
-
-const response = await fetch('https://graphql.datocms.com/', {
-  method: 'POST',
-  headers,
-  body: JSON.stringify({ query })
-});
-```
+> **Tip:** You can also use [`@datocms/cda-client`](https://github.com/datocms/cda-client), which has these headers as a built-in option.
 
 2) Enable overlays on your preview page
 
