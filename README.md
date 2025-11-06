@@ -38,9 +38,32 @@ const controller = enableDatoVisualEditing({
   baseEditingUrl: 'https://acme.admin.datocms.com',
   environment: 'main'
 });
+```
 
-// Optional toggle
-document.getElementById('toggle-visual-editing')?.addEventListener('click', () => controller.toggle());
+Optional toggle (React):
+
+```tsx
+'use client';
+import { useEffect, useRef } from 'react';
+import { enableDatoVisualEditing } from 'datocms-visual-editing';
+
+export function VisualEditingToggleButton() {
+  const controllerRef = useRef<ReturnType<typeof enableDatoVisualEditing> | null>(null);
+
+  useEffect(() => {
+    controllerRef.current = enableDatoVisualEditing({
+      baseEditingUrl: 'https://acme.admin.datocms.com',
+      environment: 'main'
+    });
+    return () => controllerRef.current?.dispose();
+  }, []);
+
+  return (
+    <button type="button" onClick={() => controllerRef.current?.toggle()}>
+      Toggle visual editing
+    </button>
+  );
+}
 ```
 
 ## React (streaming / Listen)

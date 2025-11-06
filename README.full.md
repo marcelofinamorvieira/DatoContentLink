@@ -44,13 +44,34 @@ npm install datocms-visual-editing
      environment: 'main'      // optional – available to custom resolveEditUrl handlers
    });
 
-   // Optional toggle button:
-   document
-     .getElementById('toggle-visual-editing')
-     ?.addEventListener('click', () => visualEditing.toggle());
-
-   // Call `visualEditing.dispose()` if you unmount the page (SPA route change, etc.).
+  // Call `visualEditing.dispose()` if you unmount the page (SPA route change, etc.).
    ```
+
+Optional toggle (React):
+
+```tsx
+'use client';
+import { useEffect, useRef } from 'react';
+import { enableDatoVisualEditing } from 'datocms-visual-editing';
+
+export function VisualEditingToggleButton() {
+  const controllerRef = useRef<ReturnType<typeof enableDatoVisualEditing> | null>(null);
+
+  useEffect(() => {
+    controllerRef.current = enableDatoVisualEditing({
+      baseEditingUrl: 'https://acme.admin.datocms.com',
+      environment: 'main'
+    });
+    return () => controllerRef.current?.dispose();
+  }, []);
+
+  return (
+    <button type="button" onClick={() => controllerRef.current?.toggle()}>
+      Toggle visual editing
+    </button>
+  );
+}
+```
 
 That’s it. On activation we scan the DOM, decode stega payloads, stamp attributes, scrub markers,
 and start a single `MutationObserver` to keep new nodes in sync. Overlays are live immediately.
