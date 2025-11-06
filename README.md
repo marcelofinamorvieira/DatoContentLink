@@ -21,7 +21,7 @@ const response = await fetch('https://graphql.datocms.com/', {
   method: 'POST',
   headers: {
     Authorization: `Bearer ${process.env.DATO_PREVIEW_API_TOKEN}`,
-    'X-Visual-Editing': 'vercel-v1',
+    'X-Visual-Editing': 'vercel-v1', //vercel-v1 is just the identifier: You do not neeed to be hosting on Vercel.
     'X-Base-Editing-Url': 'https://acme.admin.datocms.com'
   },
   body: JSON.stringify({ query })
@@ -63,10 +63,10 @@ Optional toggle (React):
 ```tsx
 'use client';
 import { useEffect, useRef } from 'react';
-import { enableDatoVisualEditing } from 'datocms-visual-editing';
+import { enableDatoVisualEditing, type VisualEditingController } from 'datocms-visual-editing';
 
 export function VisualEditingToggleButton() {
-  const controllerRef = useRef<ReturnType<typeof enableDatoVisualEditing> | null>(null);
+  const controllerRef = useRef<VisualEditingController | null>(null);
 
   useEffect(() => {
     controllerRef.current = enableDatoVisualEditing({
@@ -84,7 +84,7 @@ export function VisualEditingToggleButton() {
 }
 ```
 
-## React (streaming / Listen)
+## Using Visual Editing with thee Real Time API
 
 Use this only if your preview receives real-time updates via DatoCMS [Real‑time Updates API](https://www.datocms.com/docs/real-time-updates-api). If you render a static snapshot from the [Content Delivery API](https://www.datocms.com/docs/content-delivery-api), you can skip this hook; `enableDatoVisualEditing` alone will show overlays on first render, but there will be no live re-scan.
 
