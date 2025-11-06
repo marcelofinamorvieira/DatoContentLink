@@ -10,16 +10,9 @@ export type DebugSource = 'text' | 'alt' | 'attrs';
 export type DebugPayload = {
   reason: DebugReason;
   source: DebugSource;
-  constructedUrl: string;
-  baseEditingUrl: string;
-  environment?: string;
+  url: string;
   target?: string;
   decoded?: {
-    itemId?: string;
-    itemTypeId?: string;
-    fieldPath?: string;
-    locale?: string | null;
-    environment?: string | null;
     editUrl?: string;
     raw?: unknown;
   };
@@ -47,26 +40,17 @@ export function compactSelector(el: Element): string {
 export function fromDecoded(
   reason: DebugReason,
   source: DebugSource,
-  constructedUrl: string,
-  baseEditingUrl: string,
-  environment: string | undefined,
+  url: string,
   el: Element,
   decoded?: DecodedInfo | null
 ): DebugPayload {
   return {
     reason,
     source,
-    constructedUrl,
-    baseEditingUrl,
-    environment,
+    url,
     target: compactSelector(el),
     decoded: decoded
       ? {
-          itemId: decoded.itemId || undefined,
-          itemTypeId: decoded.itemTypeId,
-          fieldPath: decoded.fieldPath,
-          locale: decoded.locale ?? null,
-          environment: decoded.environment ?? null,
           editUrl: decoded.editUrl,
           raw: decoded.raw
         }

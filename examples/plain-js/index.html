@@ -81,9 +81,7 @@
         console.error('Failed to load DatoCMS content', error);
       });
 
-      const controller = enableDatoVisualEditing({
-        baseEditingUrl: BASE_EDITING_URL
-      });
+      const controller = enableDatoVisualEditing({});
 
       function normalizeBaseEditingUrl(url) {
         const trimmed = url.trim();

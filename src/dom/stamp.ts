@@ -5,10 +5,6 @@
  */
 import {
   ATTR_EDIT_URL,
-  ATTR_ITEM_ID,
-  ATTR_ITEM_TYPE_ID,
-  ATTR_ENV,
-  ATTR_LOCALE,
   ATTR_GENERATED,
   GENERATED_VALUE,
   EDIT_ATTRS,
@@ -27,10 +23,6 @@ import { hasGeneratedAttribute, setAttributesIfChanged } from '../utils/dom.js';
  */
 export type EditInfo = {
   editUrl: string;
-  itemId?: string;
-  itemTypeId?: string;
-  environment?: string;
-  locale?: string;
 };
 
 const warnedCollisionElements = new WeakSet<Element>();
@@ -51,19 +43,9 @@ export function stampAttributes(el: Element, info: EditInfo): boolean {
     warnCollision(el, existingUrl, info.editUrl);
   }
 
-  const next: Record<string, string> = {
-    [ATTR_EDIT_URL]: info.editUrl
-  };
+  const next: Record<string, string> = { [ATTR_EDIT_URL]: info.editUrl };
 
   let changed = setAttributesIfChanged(el, next);
-
-  const removableAttrs = [ATTR_ITEM_ID, ATTR_ITEM_TYPE_ID, ATTR_ENV, ATTR_LOCALE];
-  for (const attr of removableAttrs) {
-    if (!(attr in next) && el.hasAttribute(attr)) {
-      el.removeAttribute(attr);
-      changed = true;
-    }
-  }
 
   let generatedStamped = false;
   if (!existingGenerated) {

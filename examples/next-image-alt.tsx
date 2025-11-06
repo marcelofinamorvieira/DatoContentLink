@@ -19,9 +19,6 @@ export function DatoImage(props: VisualImageProps) {
       {...rest}
       alt={cleanedAlt}
       data-datocms-edit-url={editInfo?.editUrl ?? props.datoEditUrl}
-      data-datocms-item-id={editInfo?.itemId}
-      data-datocms-item-type-id={editInfo?.itemTypeId}
-      data-datocms-locale={editInfo?.locale ?? undefined}
     />
   );
 }
@@ -42,7 +39,7 @@ export function DatoImageDebugBadge({ alt }: { alt: string }) {
       data-datocms-edit-url={editInfo.editUrl}
       style={{ marginLeft: 8, fontSize: '0.75rem' }}
     >
-      Edit {editInfo.fieldPath ?? 'image'}
+      Edit image
     </a>
   );
 }

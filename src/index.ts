@@ -11,7 +11,7 @@ export type {
 } from './types.js';
 export type { DecodedInfo } from './decode/types.js';
 export { buildEditTagAttributes } from './utils/tags.js';
-export type { EditTagInfo, EditTagFormat } from './utils/tags.js';
+export type { EditTagInfo } from './utils/tags.js';
 export { getDatoEditInfo } from './utils/readInfo.js';
 export { checkStegaState } from './utils/state.js';
 export type { StegaState } from './utils/state.js';

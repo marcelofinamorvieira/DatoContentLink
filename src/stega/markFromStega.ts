@@ -13,7 +13,6 @@ import {
 import { stampAttributes, stampDebugAttributes, type EditInfo } from '../dom/stamp.js';
 import { decodeStega } from '../decode/stega.js';
 import { type DecodedInfo } from '../decode/types.js';
-import { buildDatoDeepLink } from '../link/buildDatoDeepLink.js';
 import { fromDecoded, safeStringify } from '../utils/debug.js';
 import { splitStega } from './split.js';
 import type { MarkSummary } from '../types.js';
@@ -21,11 +20,8 @@ import { resolveDocument } from '../utils/dom.js';
 
 // Narrow view of the controller's state that the marker requires.
 type MarkContext = {
-  baseEditingUrl: string;
-  environment?: string;
   root: ParentNode;
   debug?: boolean;
-  resolveEditUrl: (info: DecodedInfo) => string | null;
 };
 
 /**
@@ -46,7 +42,9 @@ export function markDOMFromStega(ctx: MarkContext): MarkSummary {
   }
 
   // First pass: collect text nodes that actually contain encoded payloads.
-  const walker = doc.createTreeWalker(ctx.root, NodeFilter.SHOW_TEXT);
+  const showText =
+    doc.defaultView?.NodeFilter?.SHOW_TEXT ?? (typeof NodeFilter !== 'undefined' ? NodeFilter.SHOW_TEXT : 4);
+  const walker = doc.createTreeWalker(ctx.root, showText);
 
   const textNodes: Text[] = [];
   let current: Node | null;
@@ -86,7 +84,7 @@ export function markDOMFromStega(ctx: MarkContext): MarkSummary {
       continue;
     }
     const target = resolveTarget(parent);
-    const info = toEditInfo(decoded, ctx);
+    const info = toEditInfo(decoded);
     if (!info) {
       continue;
     }
@@ -99,15 +97,7 @@ export function markDOMFromStega(ctx: MarkContext): MarkSummary {
       updatedTargets.add(target);
     }
     if (ctx.debug) {
-      const debugPayload = fromDecoded(
-        'stega',
-        'text',
-        info.editUrl,
-        ctx.baseEditingUrl,
-        ctx.environment,
-        target,
-        decoded
-      );
+      const debugPayload = fromDecoded('stega', 'text', info.editUrl, target, decoded);
       stampDebugAttributes(target, {
         reason: 'stega',
         url: info.editUrl,
@@ -137,7 +127,7 @@ export function markDOMFromStega(ctx: MarkContext): MarkSummary {
     if (!decoded) {
       return;
     }
-    const info = toEditInfo(decoded, ctx);
+    const info = toEditInfo(decoded);
     if (!info) {
       return;
     }
@@ -151,15 +141,7 @@ export function markDOMFromStega(ctx: MarkContext): MarkSummary {
       updatedTargets.add(target);
     }
     if (ctx.debug) {
-      const debugPayload = fromDecoded(
-        'stega',
-        'alt',
-        info.editUrl,
-        ctx.baseEditingUrl,
-        ctx.environment,
-        target,
-        decoded
-      );
+      const debugPayload = fromDecoded('stega', 'alt', info.editUrl, target, decoded);
       stampDebugAttributes(target, {
         reason: 'stega',
         url: info.editUrl,
@@ -213,34 +195,11 @@ function preferWrapperIfZeroSize(img: HTMLImageElement): Element | null {
  * Shrink the decoded payload down to the data we want to stamp on the element.
  * Today that's only the resolved edit URL; everything else is for tooling.
  */
-function toEditInfo(decoded: DecodedInfo, ctx: MarkContext): EditInfo | null {
-  const editUrl = ctx.resolveEditUrl(decoded);
+function toEditInfo(decoded: DecodedInfo): EditInfo | null {
+  const editUrl = decoded.editUrl?.trim();
   if (!editUrl) {
     return null;
   }
 
-  return {
-    editUrl
-  };
-}
-
-/**
- * Default strategy for deriving the overlay URL. We prefer the payload's
- * explicit `editUrl`, falling back to a generated deep link when necessary.
- */
-export function defaultResolveEditUrl(
-  decoded: DecodedInfo,
-  baseEditingUrl: string,
-  environment?: string
-): string | null {
-  const trimmed = decoded.editUrl?.trim();
-  if (trimmed) {
-    return trimmed;
-  }
-
-  try {
-    return buildDatoDeepLink(decoded, baseEditingUrl, environment);
-  } catch {
-    return null;
-  }
+  return { editUrl };
 }

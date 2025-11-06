@@ -5,14 +5,9 @@ import { decodeStega, stripStega } from '../src/decode/stega.js';
 const BASE_URL = 'https://acme.admin.datocms.com/editor/item_types/page/items/123/edit';
 
 describe('decodeStega', () => {
-  it('decodes payload with canonical keys', () => {
+  it('returns editUrl when present in the payload', () => {
     const payload = {
       cms: 'datocms',
-      itemId: '123',
-      itemTypeId: 'page',
-      fieldPath: 'title',
-      locale: 'en',
-      environment: 'staging',
       editUrl: BASE_URL
     };
 
@@ -21,11 +16,6 @@ describe('decodeStega', () => {
 
     expect(info).toEqual({
       cms: 'datocms',
-      itemId: '123',
-      itemTypeId: 'page',
-      fieldPath: 'title',
-      locale: 'en',
-      environment: 'staging',
       editUrl: BASE_URL,
       raw: payload
     });
@@ -35,48 +25,14 @@ describe('decodeStega', () => {
     expect(decodeStega('Plain text')).toBeNull();
   });
 
-  it('derives DatoCMS metadata from href-only payloads', () => {
+  it('returns null when editUrl is missing', () => {
     const payload = {
-      origin: 'datocms.com',
-      href:
-        'https://acme.admin.datocms.com/environments/staging/editor/item_types/article/items/456/edit#fieldPath=sections.en.0.hero_title'
+      cms: 'datocms',
+      href: 'https://acme.admin.datocms.com/editor/items/456/edit'
     };
 
     const encoded = vercelStegaCombine('Dato content', payload);
-    const info = decodeStega(encoded);
-
-    expect(info).toEqual({
-      cms: 'datocms',
-      itemId: '456',
-      itemTypeId: 'article',
-      fieldPath: 'sections.en.0.hero_title',
-      locale: null,
-      environment: 'staging',
-      editUrl: payload.href,
-      raw: payload
-    });
-  });
-
-  it('parses fieldPath from href hashes with multiple params', () => {
-    const payload = {
-      origin: 'datocms.com',
-      href:
-        'https://acme.admin.datocms.com/editor/items/123/edit#foo=1&fieldPath=title.it&x=2'
-    };
-
-    const encoded = vercelStegaCombine('Dato content', payload);
-    const info = decodeStega(encoded);
-
-    expect(info).toEqual({
-      cms: 'datocms',
-      itemId: '123',
-      itemTypeId: undefined,
-      fieldPath: 'title.it',
-      locale: null,
-      environment: null,
-      editUrl: payload.href,
-      raw: payload
-    });
+    expect(decodeStega(encoded)).toBeNull();
   });
 });
 

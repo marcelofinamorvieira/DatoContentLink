@@ -35,13 +35,9 @@ export default async function Page() {
     preview: isEnabled
   });
 
-  const baseEditingUrl = process.env.NEXT_PUBLIC_DATO_BASE_EDITING_URL!;
-
   return (
     <main className="mx-auto max-w-3xl space-y-6 p-8">
-      {isEnabled && (
-        <PreviewVisualEditing baseEditingUrl={baseEditingUrl} environment="staging" />
-      )}
+      {isEnabled && <PreviewVisualEditing />}
 
       <article
         className="rounded-xl border border-zinc-200 p-6 shadow-sm"

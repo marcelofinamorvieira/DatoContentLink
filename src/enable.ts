@@ -3,12 +3,11 @@
  * Orchestrates DOM observation, overlay rendering, optional dev tooling, and
  * exposes a controller so hosts can toggle the experience on and off.
  */
-import { markDOMFromStega, defaultResolveEditUrl } from './stega/markFromStega.js';
+import { markDOMFromStega } from './stega/markFromStega.js';
 import { clearGeneratedAttributes } from './dom/stamp.js';
 import { annotateExplicitTargetsForDebug } from './dom/annotateDebug.js';
 import { setupOverlay } from './overlay/index.js';
 import { checkStegaState } from './utils/state.js';
-import { normalizeBaseUrl } from './utils/url.js';
 import { resolveDocument } from './utils/dom.js';
 import { isDevelopment } from './utils/env.js';
 import {
@@ -24,15 +23,11 @@ import type {
   VisualEditingState,
   VisualEditingWarning
 } from './types.js';
-import type { DecodedInfo } from './decode/types.js';
 
 // Internal context passed into the stega marker to keep dependencies explicit.
 type MarkContext = {
-  baseEditingUrl: string;
-  environment?: string;
   root: ParentNode;
   debug?: boolean;
-  resolveEditUrl: (info: DecodedInfo) => string | null;
 };
 
 /**
@@ -81,40 +76,15 @@ class VisualEditingControllerImpl implements VisualEditingController {
     this.root = options.root ?? document;
     this.doc = this.ensureDocument(this.root);
 
-    const baseEditingUrl = normalizeBaseUrl(options.baseEditingUrl);
-    const resolveEditUrl = this.buildResolveEditUrl(options, baseEditingUrl);
-
-    this.context = this.buildContext(options, baseEditingUrl, resolveEditUrl);
+    this.context = this.buildContext(options);
     this.scheduleMark = createScheduler(() => this.runMark());
     this.isDev = isDevelopment();
   }
 
-  private buildResolveEditUrl(
-    options: EnableDatoVisualEditingOptions,
-    baseEditingUrl: string
-  ): (info: DecodedInfo) => string | null {
-    if (options.resolveEditUrl) {
-      return (info: DecodedInfo) =>
-        options.resolveEditUrl?.(info, {
-          baseEditingUrl,
-          environment: options.environment
-        }) ?? null;
-    }
-
-    return (info: DecodedInfo) => defaultResolveEditUrl(info, baseEditingUrl, options.environment);
-  }
-
-  private buildContext(
-    options: EnableDatoVisualEditingOptions,
-    baseEditingUrl: string,
-    resolveEditUrl: (info: DecodedInfo) => string | null
-  ): MarkContext {
+  private buildContext(options: EnableDatoVisualEditingOptions): MarkContext {
     return {
-      baseEditingUrl,
-      environment: options.environment,
       root: this.root,
-      debug: options.debug ?? false,
-      resolveEditUrl
+      debug: options.debug ?? false
     };
   }
 
@@ -287,7 +257,7 @@ class VisualEditingControllerImpl implements VisualEditingController {
       const summary = markDOMFromStega(ctx);
       summaries.push(summary);
       if (this.context.debug) {
-        annotateExplicitTargetsForDebug(ctx);
+        annotateExplicitTargetsForDebug(ctx.root);
       }
     }
 
@@ -333,7 +303,7 @@ class VisualEditingControllerImpl implements VisualEditingController {
       this.warnedNoEditables = true;
       const message =
         '[datocms-visual-editing] no editable elements were detected after enable().\n' +
-        'if you’re hydrating/streaming, do not replace the server-rendered nodes that carry _editingUrl/stega markers.\n' +
+        'if you’re hydrating/streaming, do not replace the server-rendered nodes that carry editUrl/stega markers.\n' +
         'reuse the exact DOM and render into it.';
       console.warn(message);
       const warning: VisualEditingWarning = {

@@ -6,7 +6,6 @@
  */
 import { vercelStegaDecode, vercelStegaSplit } from '@vercel/stega';
 import { DecodedInfo } from './types.js';
-import { extractFieldPathFromUrl } from '../link/fieldPath.js';
 import { trimmedOrUndefined } from '../utils/string.js';
 
 /**
@@ -39,48 +38,17 @@ export function decodeStega(
   }
 
   const data = decoded as Record<string, unknown>;
+  const editUrl = trimmedOrUndefined(data.editUrl);
 
-  let itemId = trimmedOrUndefined(data.itemId);
-  let itemTypeId = trimmedOrUndefined(data.itemTypeId);
-  let fieldPath = trimmedOrUndefined(data.fieldPath);
-  let environment = trimmedOrUndefined(data.environment) ?? null;
-  const locale = trimmedOrUndefined(data.locale) ?? null;
-  const origin = trimmedOrUndefined(data.origin);
-  const href = trimmedOrUndefined(data.href);
-  const editUrl = trimmedOrUndefined(data.editUrl) ?? href;
-
-  if (href && looksLikeDatoHref(href, origin)) {
-    const derived = deriveDatoInfoFromHref(href);
-    if (!itemId && derived.itemId) {
-      itemId = derived.itemId;
-    }
-    if (!itemTypeId && derived.itemTypeId) {
-      itemTypeId = derived.itemTypeId;
-    }
-    if (!fieldPath && derived.fieldPath) {
-      fieldPath = derived.fieldPath;
-    }
-    if (!environment && typeof derived.environment !== 'undefined') {
-      environment = derived.environment;
-    }
-  }
-
-  if (!itemId && !editUrl) {
+  if (!editUrl) {
     return null;
   }
 
-  const info: DecodedInfo = {
+  return {
     cms: 'datocms',
-    itemId: itemId ?? '',
-    itemTypeId,
-    fieldPath,
-    environment,
-    locale,
     editUrl,
     raw: decoded
   };
-
-  return info;
 }
 
 /**
@@ -97,60 +65,4 @@ export function stripStega(
 
   const resolvedSplit = split ?? vercelStegaSplit(input);
   return resolvedSplit.cleaned ?? input;
-}
-
-// We only try to derive IDs from hrefs that clearly point back to a DatoCMS admin host.
-function looksLikeDatoHref(href: string, origin?: string): boolean {
-  if (origin && !origin.includes('datocms')) {
-    return false;
-  }
-  try {
-    const url = new URL(href);
-    return url.hostname.includes('datocms');
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Infer record identifiers from a DatoCMS editor URL, primarily used when the
- * upstream payload did not embed item IDs explicitly.
- */
-function deriveDatoInfoFromHref(href: string): {
-  itemId?: string;
-  itemTypeId?: string;
-  fieldPath?: string;
-  environment?: string | null;
-} {
-  try {
-    const url = new URL(href);
-    const segments = url.pathname.split('/').filter(Boolean).map((part) => decodeURIComponent(part));
-
-    let environment: string | null | undefined;
-    let offset = 0;
-    if (segments[offset] === 'environments' && segments.length > offset + 1) {
-      environment = segments[offset + 1] || null;
-      offset += 2;
-    }
-
-    let itemTypeId: string | undefined;
-    let itemId: string | undefined;
-
-    for (let index = offset; index < segments.length; index++) {
-      const segment = segments[index];
-      if (segment === 'item_types' && index + 1 < segments.length) {
-        itemTypeId = segments[index + 1];
-      }
-      if (segment === 'items' && index + 1 < segments.length) {
-        itemId = segments[index + 1];
-      }
-    }
-
-    const extractedFieldPath = extractFieldPathFromUrl(href);
-    const fieldPath = extractedFieldPath ?? undefined;
-
-    return { itemId, itemTypeId, fieldPath, environment };
-  } catch {
-    return {};
-  }
 }

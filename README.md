@@ -35,10 +35,7 @@ const response = await fetch('https://graphql.datocms.com/', {
 ```ts
 import { enableDatoVisualEditing } from 'datocms-visual-editing';
 
-const controller = enableDatoVisualEditing({
-  baseEditingUrl: 'https://acme.admin.datocms.com',
-  environment: 'main'
-}); 
+const controller = enableDatoVisualEditing({});
 
 controller.enable();
 ```
@@ -66,10 +63,7 @@ export function VisualEditingToggleButton() {
   const controllerRef = useRef<VisualEditingController | null>(null);
 
   useEffect(() => {
-    controllerRef.current = enableDatoVisualEditing({
-      baseEditingUrl: 'https://acme.admin.datocms.com',
-      environment: 'main'
-    });
+    controllerRef.current = enableDatoVisualEditing({});
     return () => controllerRef.current?.dispose();
   }, []);
 
@@ -105,7 +99,7 @@ function subscribe({ onUpdate }: { onUpdate: () => void }) {
 export function PreviewVisualEditing() {
   const scopeRef = useRef<HTMLDivElement | null>(null);
   useDatoVisualEditingListen(subscribe, {
-    controllerOptions: { baseEditingUrl: 'https://acme.admin.datocms.com', environment: 'main' },
+    controllerOptions: {},
     scopeRef,
     initialRefresh: true
   });
@@ -121,19 +115,10 @@ export function PreviewVisualEditing() {
 import { enableDatoVisualEditing } from 'datocms-visual-editing';
 
 // Minimal
-const controller = enableDatoVisualEditing({
-  baseEditingUrl: 'https://acme.admin.datocms.com'
-});
+const controller = enableDatoVisualEditing({});
 
 // Common options
 const controller2 = enableDatoVisualEditing({
-  // Required: your project’s admin URL. Used to build deep links and sent
-  // as X-Base-Editing-Url on preview requests.
-  baseEditingUrl: 'https://acme.admin.datocms.com',
-
-  // Optional: environment slug for diagnostics and deep links.
-  environment: 'main',
-
   // Optional: limit scanning/observation to this root instead of the whole document.
   // Can be a ShadowRoot or a specific container element.
   root: document,
@@ -142,13 +127,7 @@ const controller2 = enableDatoVisualEditing({
   debug: false,
 
   // Optional: when false, the controller starts disabled; call enable() manually.
-  autoEnable: true,
-
-  // Optional: customize the edit URL per payload. Return a string to override,
-  // or return null to skip stamping that element entirely.
-  resolveEditUrl: (info, { baseEditingUrl }) => {
-    return info.editUrl ?? `${baseEditingUrl}/items/${info.itemId}`;
-  }
+  autoEnable: true
 });
 
 // Control & refresh
@@ -200,16 +179,9 @@ Scrubs stega payloads from a DOM subtree without enabling overlays. Returns a di
 import { buildEditTagAttributes, getDatoEditInfo } from 'datocms-visual-editing';
 
 // Server-side or prerender step
-const attrs = buildEditTagAttributes(
-  {
-    itemId: '123',
-    itemTypeId: '456',
-    environment: 'main',
-    locale: 'en',
-    editUrl: 'https://acme.admin.datocms.com/...'
-  },
-  'url' // or 'attrs' | 'json'
-);
+const attrs = buildEditTagAttributes({
+  editUrl: 'https://acme.admin.datocms.com/editor/items/123/edit'
+});
 
 for (const [name, value] of Object.entries(attrs)) {
   element.setAttribute(name, value);
@@ -217,7 +189,7 @@ for (const [name, value] of Object.entries(attrs)) {
 
 // Later, read info back from an element
 const info = getDatoEditInfo(element);
-console.log(info?.itemId, info?.editUrl);
+console.log(info?.editUrl);
 ```
 
 Use `buildEditTagAttributes` to generate attributes server‑side; `getDatoEditInfo` reads metadata from an element (prefers explicit attributes, falls back to stega).
@@ -235,24 +207,13 @@ React example (numeric field):
 import { buildEditTagAttributes } from 'datocms-visual-editing';
 
 type Props = {
-  itemId: string;
-  itemTypeId: string;
+  editUrl: string;
   price: number;
 };
 
-export function ProductPrice({ itemId, itemTypeId, price }: Props) {
+export function ProductPrice({ editUrl, price }: Props) {
   // Number fields don’t include stega in their rendered text, so stamp attributes manually.
-  const attrs = buildEditTagAttributes(
-    {
-      itemId,
-      itemTypeId,
-      fieldPath: 'price',
-      environment: 'main',
-      // If you already have the editor URL, you can pass it directly
-      // editUrl: `https://acme.admin.datocms.com/items/${itemId}`
-    },
-    'url'
-  );
+  const attrs = buildEditTagAttributes({ editUrl });
 
   return (
     <span {...attrs} data-datocms-edit-target>
@@ -275,7 +236,7 @@ const clean = stripStega(someString);
 
 // Inspect the current DOM footprint
 const state = checkStegaState(document);
-// { editableTotal, generatedTotal, explicitTotal, infoOnlyTotal, ... }
+// { editableTotal, generatedTotal, explicitTotal, ... }
 ```
 
 ### React helper
@@ -288,7 +249,7 @@ See Using Visual Editing with the Real Time API for the React hook usage.
 ### Manually marking elements
 
 - You can author edit attributes yourself. The overlay activates on the nearest element with `data-datocms-edit-url` and `data-datocms-editable`.
-- Prefer generating attributes from decoded payloads using server helpers or provide a custom `resolveEditUrl` when enabling the runtime.
+- Prefer generating attributes from decoded payloads using server helpers.
 - If multiple payloads would map to the same element, split content into dedicated wrappers.
 
 Target wrappers explicitly with `data-datocms-edit-target` so a parent wrapper receives the attributes instead of the inner element. For images with zero size, the nearest wrapper is automatically targeted so the overlay stays clickable.
@@ -296,7 +257,7 @@ Target wrappers explicitly with `data-datocms-edit-target` so a parent wrapper r
 ### Structured text fields
 
 - Structured Text often renders nested markup; to highlight the whole block as one edit target, spread edit attributes on a wrapper and add `data-datocms-edit-target`.
-- Use the record’s `_editingUrl` plus the field path (e.g. `content`, `description`) and active `locale` to build attributes.
+- Use the record’s `editUrl` plus the field path (e.g. `content`, `description`) and active `locale` to build attributes.
 - Keep DOM stable between server and client (don’t replace the Structured Text subtree); call `controller.refresh(wrapper)` after streaming updates if needed.
 
 React example:
@@ -307,7 +268,7 @@ import { StructuredText } from 'react-datocms/structured-text';
 
 export function Content({ editingUrl, content, locale }) {
   const attrs = editingUrl
-    ? buildEditTagAttributes({ _editingUrl: editingUrl, fieldPath: 'content', locale })
+    ? buildEditTagAttributes({ editUrl: editingUrl })
     : {};
 
   return (
@@ -354,14 +315,14 @@ Event names: `datocms:visual-editing:ready`, `datocms:visual-editing:marked`, `d
 
 ### Streaming & rehydration
 
-- When streaming preview responses or rehydrating, reuse the server-rendered DOM nodes. The `_editingUrl` metadata lives on those elements; replacing them breaks overlays.
+- When streaming preview responses or rehydrating, reuse the server-rendered DOM nodes. The `editUrl` metadata lives on those elements; replacing them breaks overlays.
 - Mutate text/attributes in place and call `controller.refresh(root?)` after new markup lands, or use `useDatoVisualEditingListen`.
 
 ### Debug tools and low‑level helpers
 
 - `debug: true` adds `data-datocms-debug-*` attributes for in-browser inspection.
 - `checkStegaState(root?)` provides programmatic insight into editable totals and leftover markers.
-- Utilities: `decodeStega(string)`, `stripStega(string)`, `getDatoEditInfo(element)`, `buildEditTagAttributes(info, format)`.
+- Utilities: `decodeStega(string)`, `stripStega(string)`, `getDatoEditInfo(element)`, `buildEditTagAttributes({ editUrl })`.
 ## Troubleshooting
 
 - No overlay: ensure elements have `data-datocms-edit-url` (check your fetch headers).

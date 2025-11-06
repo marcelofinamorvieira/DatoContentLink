@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { trimmedOrNull, trimmedOrUndefined } from '../../src/utils/string.js';
-import { normalizeBaseUrl, stripTrailingSlash } from '../../src/utils/url.js';
 import { hasGeneratedAttribute, resolveDocument, setAttributesIfChanged } from '../../src/utils/dom.js';
 import { isDevelopment } from '../../src/utils/env.js';
 import { ATTR_GENERATED, GENERATED_VALUE } from '../../src/constants.js';
@@ -19,23 +18,6 @@ describe('string utils', () => {
     expect(trimmedOrNull('')).toBeNull();
     expect(trimmedOrNull('  ')).toBeNull();
     expect(trimmedOrNull('value')).toBe('value');
-  });
-});
-
-describe('url utils', () => {
-  it('normalises base URLs', () => {
-    expect(normalizeBaseUrl('https://acme.admin.datocms.com/')).toBe('https://acme.admin.datocms.com');
-    expect(normalizeBaseUrl('https://acme.admin.datocms.com/editor/')).toBe('https://acme.admin.datocms.com/editor');
-  });
-
-  it('throws when base URL is missing or invalid', () => {
-    expect(() => normalizeBaseUrl('')).toThrow('baseEditingUrl is required');
-    expect(() => normalizeBaseUrl('not-a-url')).toThrow('baseEditingUrl must be a valid URL');
-  });
-
-  it('strips trailing slashes', () => {
-    expect(stripTrailingSlash('https://example.com/')).toBe('https://example.com');
-    expect(stripTrailingSlash('https://example.com/path')).toBe('https://example.com/path');
   });
 });
 

@@ -8,7 +8,6 @@ import {
   GENERATED_VALUE,
   ATTR_EDITABLE
 } from '../constants.js';
-import { DATA_ATTR_EDIT_INFO } from './attr.js';
 import { splitStega } from '../stega/split.js';
 import { compactSelector } from './debug.js';
 
@@ -17,12 +16,10 @@ export type StegaState = {
   editableTotal: number;
   generatedTotal: number;
   explicitTotal: number;
-  infoOnlyTotal: number;
   encodedTextNodes: number;
   encodedImageAlts: number;
   samples: {
     editable?: string[];
-    infoOnly?: string[];
   };
 };
 
@@ -41,7 +38,6 @@ export function checkStegaState(root?: ParentNode): StegaState {
       editableTotal: 0,
       generatedTotal: 0,
       explicitTotal: 0,
-      infoOnlyTotal: 0,
       encodedTextNodes: 0,
       encodedImageAlts: 0,
       samples: {}
@@ -59,9 +55,6 @@ export function checkStegaState(root?: ParentNode): StegaState {
 
   const editable = Array.from(scope.querySelectorAll<HTMLElement>(`[${ATTR_EDIT_URL}]`));
   const generated = editable.filter((el) => el.getAttribute(ATTR_GENERATED) === GENERATED_VALUE);
-  const infoOnly = Array.from(
-    scope.querySelectorAll<HTMLElement>(`[${DATA_ATTR_EDIT_INFO}]:not([${ATTR_EDIT_URL}])`)
-  );
 
   editable.forEach((el) => {
     el.setAttribute(ATTR_EDITABLE, '');
@@ -69,7 +62,9 @@ export function checkStegaState(root?: ParentNode): StegaState {
 
   let encodedTextNodes = 0;
   if (doc) {
-    const walker = doc.createTreeWalker(resolvedRoot, NodeFilter.SHOW_TEXT);
+    const showText =
+      doc.defaultView?.NodeFilter?.SHOW_TEXT ?? (typeof NodeFilter !== 'undefined' ? NodeFilter.SHOW_TEXT : 4);
+    const walker = doc.createTreeWalker(resolvedRoot, showText);
     let current: Node | null;
     while ((current = walker.nextNode())) {
       if (!(current instanceof Text)) {
@@ -97,19 +92,16 @@ export function checkStegaState(root?: ParentNode): StegaState {
   });
 
   const editableSamples = editable.slice(0, 3).map((el) => compactSelector(el));
-  const infoOnlySamples = infoOnly.slice(0, 3).map((el) => compactSelector(el));
 
   return {
     scope: resolvedRoot,
     editableTotal: editable.length,
     generatedTotal: generated.length,
     explicitTotal: editable.length - generated.length,
-    infoOnlyTotal: infoOnly.length,
     encodedTextNodes,
     encodedImageAlts,
     samples: {
-      editable: editableSamples.length ? editableSamples : undefined,
-      infoOnly: infoOnlySamples.length ? infoOnlySamples : undefined
+      editable: editableSamples.length ? editableSamples : undefined
     }
   };
 }
