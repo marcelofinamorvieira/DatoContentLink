@@ -2,7 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { config } from 'dotenv';
-import { withContentLinkHeaders, decodeStega, stripStega } from '../dist/index.js';
+import { decodeStega, stripStega } from '../dist/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ENV_FILES = [
@@ -35,14 +35,32 @@ if (!BASE_EDITING_URL || !API_TOKEN) {
   process.exit(1);
 }
 
-const fetchDato = withContentLinkHeaders(fetch, BASE_EDITING_URL);
+function normalizeBaseEditingUrl(url) {
+  if (!url) {
+    throw new Error('baseEditingUrl is required');
+  }
+
+  const trimmed = url.trim();
+  const sanitized = trimmed.endsWith('/') ? trimmed.slice(0, -1) : trimmed;
+
+  try {
+    const parsed = new URL(sanitized);
+    return `${parsed.origin}${parsed.pathname.replace(/\/$/, '')}`;
+  } catch {
+    throw new Error('baseEditingUrl must be a valid URL');
+  }
+}
+
+const NORMALIZED_BASE_EDITING_URL = normalizeBaseEditingUrl(BASE_EDITING_URL);
 
 async function fetchGraphQL(query, variables) {
-  const response = await fetchDato('https://graphql.datocms.com/', {
+  const response = await fetch('https://graphql.datocms.com/', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${API_TOKEN}`
+      Authorization: `Bearer ${API_TOKEN}`,
+      'X-Visual-Editing': 'vercel-v1',
+      'X-Base-Editing-Url': NORMALIZED_BASE_EDITING_URL
     },
     body: JSON.stringify({ query, variables })
   });

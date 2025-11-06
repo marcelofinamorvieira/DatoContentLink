@@ -2,9 +2,9 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { vercelStegaDecode, vercelStegaSplit } from '@vercel/stega';
 
 import { enableDatoVisualEditing } from '../src/index.js';
-import { withContentLinkHeaders } from '../src/net/withContentLinkHeaders.js';
 import { stripStega } from '../src/decode/stega.js';
 import { buildDatoDeepLink } from '../src/link/buildDatoDeepLink.js';
+import { normalizeBaseUrl } from '../src/utils/url.js';
 import type { DecodedInfo } from '../src/decode/types.js';
 
 const API_TOKEN = process.env.DATOCMS_VISUAL_EDITING_TOKEN;
@@ -98,15 +98,18 @@ integrationDescribe('DatoCMS preview integration', () => {
           (document.constructor as typeof Document)) as typeof Document;
     }
 
-    const fetchDato = withContentLinkHeaders(fetch, baseEditingUrl);
+    const normalizedBaseEditingUrl = normalizeBaseUrl(baseEditingUrl);
+    const previewHeaders = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiToken}`,
+      'X-Visual-Editing': 'vercel-v1',
+      'X-Base-Editing-Url': normalizedBaseEditingUrl
+    } as const;
 
     const [previewRes, baselineRes] = await Promise.all([
-      fetchDato(GRAPHQL_ENDPOINT, {
+      fetch(GRAPHQL_ENDPOINT, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiToken}`
-        },
+        headers: previewHeaders,
         body: JSON.stringify({ query: VISUAL_EDITING_QUERY })
       }),
       fetch(GRAPHQL_ENDPOINT, {
@@ -256,7 +259,7 @@ function parseDatoHref(href: string) {
 
     const editUrl = heroTitleEl?.getAttribute(ATTR_EDIT_URL);
     expect(editUrl).not.toBeNull();
-    const normalizedBase = baseEditingUrl.replace(/\/$/, '');
+    const normalizedBase = normalizeBaseUrl(baseEditingUrl);
     expect((editUrl ?? '').startsWith(normalizedBase)).toBe(true);
     expect(heroTitleEl?.hasAttribute(ATTR_ITEM_ID)).toBe(false);
     expect(heroTitleEl?.hasAttribute(ATTR_ITEM_TYPE_ID)).toBe(false);

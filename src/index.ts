@@ -1,6 +1,5 @@
 /** Public entry point: re-export the APIs consumers rely on. */
 export { enableDatoVisualEditing } from './enable.js';
-export { withContentLinkHeaders } from './net/withContentLinkHeaders.js';
 export { decodeStega, stripStega } from './decode/stega.js';
 export { enableDatoAutoClean } from './dom/autoClean.js';
 export type {

@@ -1,5 +1,3 @@
-import { withContentLinkHeaders } from 'datocms-visual-editing';
-
 export type DatoQueryArgs<TVariables extends Record<string, unknown>> = {
   query: string;
   variables?: TVariables;
@@ -31,14 +29,18 @@ export async function datoQuery<TData, TVariables extends Record<string, unknown
     throw new Error('NEXT_PUBLIC_DATO_BASE_EDITING_URL is required for visual editing');
   }
 
-  const fetchWithHeaders = withContentLinkHeaders(fetch, baseEditingUrl);
+  const normalizedBaseEditingUrl = normalizeBaseEditingUrl(baseEditingUrl);
 
-  const response = await fetchWithHeaders(endpoint, {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+    'X-Visual-Editing': 'vercel-v1',
+    'X-Base-Editing-Url': normalizedBaseEditingUrl
+  };
+
+  const response = await fetch(endpoint, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`
-    },
+    headers,
     body: JSON.stringify({ query, variables })
   });
 
@@ -49,4 +51,12 @@ export async function datoQuery<TData, TVariables extends Record<string, unknown
   }
 
   return payload.data;
+}
+
+function normalizeBaseEditingUrl(url: string): string {
+  const trimmed = url.trim();
+  const sanitized = trimmed.endsWith('/') ? trimmed.slice(0, -1) : trimmed;
+
+  const parsed = new URL(sanitized);
+  return `${parsed.origin}${parsed.pathname.replace(/\/$/, '')}`;
 }

@@ -11,7 +11,7 @@ All notable changes to this project will be documented in this file.
 - Update tests and documentation to cover overlay toggling and controller lifecycle semantics.
 - Unify preview environment variables under `DATOCMS_VISUAL_EDITING_*` and load them via shared dotenv setup (includes CLI helper support).
 - Remove `devPanel` option and lifecycle callbacks (`onReady`, `onMarked`, `onStateChange`, `onWarning`); rely on the existing DOM CustomEvents instead.
-- BREAKING: `withContentLinkHeaders` now requires `baseEditingUrl` as the second argument and always sets `X-Base-Editing-Url` from that value. Passing the header manually is no longer supported.
+- BREAKING: remove `withContentLinkHeaders`; set preview headers manually or use `@datocms/cda-client` helpers instead.
 
 ## 0.8.0 - 2025-10-16
 - Controller: new public `refresh(root?)` plus lifecycle callbacks (`onReady`, `onMarked`, `onStateChange`, `onWarning`) and DOM events (`EVENT_READY`, `EVENT_MARKED`, `EVENT_STATE`, `EVENT_WARN`).

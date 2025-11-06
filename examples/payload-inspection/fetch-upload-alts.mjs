@@ -2,7 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { config } from 'dotenv';
-import { decodeStega, stripStega, withContentLinkHeaders } from '../../dist/index.js';
+import { decodeStega, stripStega } from '../../dist/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -35,7 +35,7 @@ if (!baseEditingUrl || !token) {
   process.exit(1);
 }
 
-const fetchDato = withContentLinkHeaders(fetch, baseEditingUrl);
+const normalizedBaseEditingUrl = normalizeBaseEditingUrl(baseEditingUrl);
 
 const ASSET_QUERY = /* GraphQL */ `
   query VisualEditingAssetAlts {
@@ -47,11 +47,13 @@ const ASSET_QUERY = /* GraphQL */ `
   }
 `;
 
-const response = await fetchDato(endpoint, {
+const response = await fetch(endpoint, {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`
+    Authorization: `Bearer ${token}`,
+    'X-Visual-Editing': 'vercel-v1',
+    'X-Base-Editing-Url': normalizedBaseEditingUrl
   },
   body: JSON.stringify({ query: ASSET_QUERY })
 });
@@ -137,5 +139,17 @@ if (hasItemId.length) {
     console.log(
       `${entry.uploadId}: itemId=${entry.decoded.itemId}, editUrl=${entry.decoded.editUrl}`
     );
+  }
+}
+
+function normalizeBaseEditingUrl(url) {
+  const trimmed = url.trim();
+  const sanitized = trimmed.endsWith('/') ? trimmed.slice(0, -1) : trimmed;
+
+  try {
+    const parsed = new URL(sanitized);
+    return `${parsed.origin}${parsed.pathname.replace(/\/$/, '')}`;
+  } catch {
+    throw new Error('DATOCMS_VISUAL_EDITING_BASE_URL must be a valid URL');
   }
 }

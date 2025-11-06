@@ -28,21 +28,21 @@ const response = await fetch('https://graphql.datocms.com/', {
 });
 ```
 
-Or use the helper to attach the headers automatically (recommended):
+Or use [`@datocms/cda-client`](https://github.com/datocms/cda-client) to have the
+Content Delivery client build the headers for you:
 
 ```ts
-import { withContentLinkHeaders } from 'datocms-visual-editing';
+import { buildRequestHeaders } from '@datocms/cda-client';
 
-const fetchDato = withContentLinkHeaders(
-  fetch,
-  'https://acme.admin.datocms.com'
-);
+const headers = buildRequestHeaders({
+  token: process.env.DATO_PREVIEW_API_TOKEN!,
+  baseEditingUrl: 'https://acme.admin.datocms.com',
+  visualEditing: 'vercel-v1'
+});
 
-const response = await fetchDato('https://graphql.datocms.com/', {
+const response = await fetch('https://graphql.datocms.com/', {
   method: 'POST',
-  headers: {
-    Authorization: `Bearer ${process.env.DATO_PREVIEW_API_TOKEN}`
-  },
+  headers,
   body: JSON.stringify({ query })
 });
 ```
@@ -175,27 +175,6 @@ Controller methods explained:
 - toggle(): enable/disable overlays and observers without destroying the instance.
 - refresh(root?): re-run a stega scan for the whole root or the provided subtree (use after you mutate DOM outside observers).
 - dispose(): permanently disconnects observers and removes only generated attributes. After dispose, the controller cannot be re-enabled; create a new one if needed.
-
-### withContentLinkHeaders(fetchLike, baseEditingUrl)
-
-```ts
-import { withContentLinkHeaders } from 'datocms-visual-editing';
-
-const fetchDato = withContentLinkHeaders(fetch, 'https://acme.admin.datocms.com');
-
-// Use like fetch
-const res = await fetchDato('https://graphql.datocms.com/', {
-  method: 'POST',
-  headers: { Authorization: `Bearer ${process.env.DATO_PREVIEW_API_TOKEN}` },
-  body: JSON.stringify({ query })
-});
-
-// Works with Request too
-const req = new Request('https://graphql.datocms.com/', { method: 'POST' });
-const res2 = await fetchDato(req, { body: JSON.stringify({ query }) });
-```
-
-Wraps `fetch` to send `X-Visual-Editing: vercel-v1` and `X-Base-Editing-Url: <normalized>` on every request.
 
 ### enableDatoAutoClean(selector?, options?): () => void
 
