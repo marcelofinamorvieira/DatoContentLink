@@ -84,7 +84,13 @@ export function VisualEditingToggleButton() {
 }
 ```
 
-## Using Visual Editing with thee Real Time API
+### Cleanup & disposal
+
+- The runtime scrubs zero‑width stega markers automatically after stamping attributes on elements.
+- Call `controller.dispose()` when your preview surface unmounts (e.g. SPA route change). This disconnects observers and removes only the generated attributes the library added.
+- Need cleanup without enabling overlays? Use `enableDatoAutoClean(selector, options)` to scrub stega payloads in a specific DOM subtree.
+
+## Using Visual Editing with the Real Time API
 
 Use this only if your preview receives real-time updates via DatoCMS [Real‑time Updates API](https://www.datocms.com/docs/real-time-updates-api). If you render a static snapshot from the [Content Delivery API](https://www.datocms.com/docs/content-delivery-api), you can skip this hook; `enableDatoVisualEditing` alone will show overlays on first render, but there will be no live re-scan.
 
@@ -119,28 +125,75 @@ export function PreviewVisualEditing() {
 - `autoEnable` (true): set false for manual enable/disable.
 - `resolveEditUrl(info, ctx)`: rewrite/skip links (return null to skip).
 
-Lifecycle updates fire CustomEvents on `document`:
+## Advanced usage
+
+### Manually marking elements
+
+- You can author edit attributes yourself. The overlay activates on the nearest element with `data-datocms-edit-url` and `data-datocms-editable`.
+- Prefer generating attributes from decoded payloads using server helpers or provide a custom `resolveEditUrl` when enabling the runtime.
+- If multiple payloads would map to the same element, split content into dedicated wrappers.
+
+Target wrappers explicitly with `data-datocms-edit-target` so a parent wrapper receives the attributes instead of the inner element. For images with zero size, the nearest wrapper is automatically targeted so the overlay stays clickable.
+
+### Working with custom roots
+
+Pass a `root` to scope scanning and observation to a particular subtree (for example, a ShadowRoot or a specific container). Only nodes within that root are touched and later cleaned by `dispose()`.
+
+## Runtime & debugging
+
+### Runtime behaviour
+
+1. Initial scan – walks text nodes and `<img alt>` values inside `root`, decodes stega, stamps attributes, scrubs markers.
+2. MutationObserver – watches character data, child list changes, and `alt` mutations; rescans are batched via microtasks.
+3. Overlay controller – listens for hover/click/focus/keyboard; opens the nearest ancestor’s `data-datocms-edit-url` in a new tab.
+4. Dispose – disconnects observers, tears down listeners, removes only generated attributes.
+
+### Lifecycle events
+
+Listen to DOM CustomEvents on `document`:
 
 ```ts
 document.addEventListener('datocms:visual-editing:ready', (event) => {
-  console.log('ready', event.detail); // MarkSummary payload
+  console.log('ready', (event as CustomEvent).detail);
 });
 ```
 
-Other events: `datocms:visual-editing:marked`, `datocms:visual-editing:state`, `datocms:visual-editing:warn`.
+Event names: `datocms:visual-editing:ready`, `datocms:visual-editing:marked`, `datocms:visual-editing:state`, `datocms:visual-editing:warn`.
 
+- `ready` / `marked`: MarkSummary payload
+- `state`: `{ enabled, disposed }`
+- `warn`: `{ code, message }` (development only)
+
+### Streaming & rehydration
+
+- When streaming preview responses or rehydrating, reuse the server-rendered DOM nodes. The `_editingUrl` metadata lives on those elements; replacing them breaks overlays.
+- Mutate text/attributes in place and call `controller.refresh(root?)` after new markup lands, or use `useDatoVisualEditingListen`.
+
+### Debug tools and low‑level helpers
+
+- `debug: true` adds `data-datocms-debug-*` attributes for in-browser inspection.
+- `checkStegaState(root?)` provides programmatic insight into editable totals and leftover markers.
+- Utilities: `decodeStega(string)`, `stripStega(string)`, `getDatoEditInfo(element)`, `buildEditTagAttributes(info, format)`.
 ## Troubleshooting
 
 - No overlay: ensure elements have `data-datocms-edit-url` (check your fetch headers).
 - Wrong highlight: add `data-datocms-edit-target` to the desired wrapper.
 - Multiple payloads on one element: split content into dedicated wrappers.
 
-## Learn more & examples
+## Examples & demos
 
-- Full guide with API details → [README.full.md](./README.full.md)
 - Next.js App Router example → [examples/nextjs-app-router](./examples/nextjs-app-router/)
 - Plain JS sample → [examples/plain-js](./examples/plain-js/)
 - Payload inspection scripts → [examples/payload-inspection](./examples/payload-inspection/)
+ - Ecommerce Website Demo (Visual Editing + Realtime Updates) → [imagesVisualEditing branch](https://github.com/datocms/ecommerce-website-demo/tree/imagesVisualEditing)
+
+## Contributing & development
+
+- Install: `pnpm install` (Node ≥18)
+- Build: `pnpm run build`
+- Test: `pnpm run test` (or `pnpm run test:watch`)
+- Lint/format: `pnpm run lint` / `pnpm run format`
+- See `CONTRIBUTING.md` for detailed guidelines and integration testing setup.
 
 ## License
 
