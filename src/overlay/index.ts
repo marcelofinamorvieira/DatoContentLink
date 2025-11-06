@@ -178,15 +178,6 @@ export function setupOverlay(doc?: Document): () => void {
     return () => void 0;
   }
 
-  // Ensure the cursor indicates clickability over editable regions, even when
-  // descendants set their own cursor styles. This stylesheet is only present
-  // while the overlay is enabled and is removed on teardown.
-  const styleEl = resolvedDoc.createElement('style');
-  styleEl.setAttribute('data-datocms-visual-editing-cursor', '');
-  styleEl.textContent =
-    '[data-datocms-edit-url], [data-datocms-edit-url] * { cursor: pointer !important; }';
-  (resolvedDoc.head ?? resolvedDoc.body)?.appendChild(styleEl);
-
   const overlay = new HighlightOverlay(resolvedDoc);
   let current: Target | null = null;
   let resizeObserver: ResizeObserver | null = null;
@@ -354,11 +345,6 @@ export function setupOverlay(doc?: Document): () => void {
     refresh.cancel();
     throttledPointer.cancel();
     overlay.dispose();
-    try {
-      styleEl.remove();
-    } catch {
-      // Ignore failures removing the helper stylesheet
-    }
     current = null;
   };
 }
