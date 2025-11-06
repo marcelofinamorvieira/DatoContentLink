@@ -142,14 +142,20 @@ const controller2 = enableDatoVisualEditing({
 });
 
 // Control & refresh
-controller2.disable();
-controller2.enable();
-controller2.toggle();
-controller2.refresh(); // or controller2.refresh(someSubtree)
-controller2.dispose();
+controller2.disable(); // turn overlays off (keeps controller reusable)
+controller2.enable();  // turn overlays on
+controller2.toggle();  // flip overlays on/off without disposing
+controller2.refresh(); // re-scan the whole root; or pass a subtree: controller2.refresh(someSubtree)
+controller2.dispose(); // permanently tear down and remove generated attributes (controller becomes inert)
 ```
 
 Returns a controller to manage overlays and rescans.
+
+Controller methods explained:
+
+- toggle(): enable/disable overlays and observers without destroying the instance.
+- refresh(root?): re-run a stega scan for the whole root or the provided subtree (use after you mutate DOM outside observers).
+- dispose(): permanently disconnects observers and removes only generated attributes. After dispose, the controller cannot be re-enabled; create a new one if needed.
 
 ### withContentLinkHeaders(fetchLike, baseEditingUrl)
 
@@ -227,6 +233,46 @@ console.log(info?.itemId, info?.editUrl);
 
 Use `buildEditTagAttributes` to generate attributes server‑side; `getDatoEditInfo` reads metadata from an element (prefers explicit attributes, falls back to stega).
 
+When would you use this?
+
+- Numeric/boolean/computed fields that don’t carry stega (e.g. a number field, a boolean rendered as “In stock”).
+- Values produced by formatters (currency, dates) or composed UI where the visible string doesn’t include the original stega payload.
+- Icon‑only or badge elements where the edit target isn’t a text node.
+- Static or pre‑annotated markup where you want full control over which element gets the overlay.
+
+React example (numeric field):
+
+```tsx
+import { buildEditTagAttributes } from 'datocms-visual-editing';
+
+type Props = {
+  itemId: string;
+  itemTypeId: string;
+  price: number;
+};
+
+export function ProductPrice({ itemId, itemTypeId, price }: Props) {
+  // Number fields don’t include stega in their rendered text, so stamp attributes manually.
+  const attrs = buildEditTagAttributes(
+    {
+      itemId,
+      itemTypeId,
+      fieldPath: 'price',
+      environment: 'main',
+      // If you already have the editor URL, you can pass it directly
+      // editUrl: `https://acme.admin.datocms.com/items/${itemId}`
+    },
+    'url'
+  );
+
+  return (
+    <span {...attrs} data-datocms-edit-target>
+      {price.toLocaleString(undefined, { style: 'currency', currency: 'USD' })}
+    </span>
+  );
+}
+```
+
 ### Low‑level utilities
 
 ```ts
@@ -269,6 +315,47 @@ useDatoVisualEditingListen(({ onUpdate }) => {
 - If multiple payloads would map to the same element, split content into dedicated wrappers.
 
 Target wrappers explicitly with `data-datocms-edit-target` so a parent wrapper receives the attributes instead of the inner element. For images with zero size, the nearest wrapper is automatically targeted so the overlay stays clickable.
+
+### Structured text fields
+
+- Structured Text often renders nested markup; to highlight the whole block as one edit target, spread edit attributes on a wrapper and add `data-datocms-edit-target`.
+- Use the record’s `_editingUrl` plus the field path (e.g. `content`, `description`) and active `locale` to build attributes.
+- Keep DOM stable between server and client (don’t replace the Structured Text subtree); call `controller.refresh(wrapper)` after streaming updates if needed.
+
+React example:
+
+```tsx
+import { buildEditTagAttributes } from 'datocms-visual-editing';
+import { StructuredText } from 'react-datocms/structured-text';
+
+type Props = {
+  page: { _editingUrl?: string | null; content: { value: unknown } };
+  locale: string;
+};
+
+export function LegalContent({ page, locale }: Props) {
+  const editingUrl = page?._editingUrl ?? null;
+  const wrapperProps = editingUrl
+    ? {
+        ...buildEditTagAttributes({ _editingUrl: editingUrl, fieldPath: 'content', locale }),
+        'data-datocms-edit-target': ''
+      }
+    : undefined;
+
+  return (
+    <section>
+      <div {...(wrapperProps ?? {})}>
+        <StructuredText data={page.content.value as any} />
+      </div>
+    </section>
+  );
+}
+```
+
+Notes:
+
+- For nested paths use arrays, e.g. `fieldPath: ['blocks', 0, 'title']`.
+- If you only want a specific element inside the Structured Text to be the target, apply the attributes to that element and include `data-datocms-edit-target` there.
 
 ### Working with custom roots
 
