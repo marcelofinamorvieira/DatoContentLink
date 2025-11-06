@@ -38,10 +38,22 @@ import { enableDatoVisualEditing } from 'datocms-visual-editing';
 const controller = enableDatoVisualEditing({
   baseEditingUrl: 'https://acme.admin.datocms.com',
   environment: 'main'
-});
+}); 
+
+controller.enable();
 ```
 
-Optional toggle (React):
+> That’s all you need for the majority of projects—if you see overlays and deep links opening the correct records, your setup is complete!
+>
+> The following (optional) sections explain:
+> - How to add a toggle button (with example React code)
+> - How to integrate with the Real Time API for live content updates
+> - How to customize the overlay and debug stega payloads
+> - Handling fields that do not contain stega markers (like numbers or booleans)
+> - Handling Structured Text fields
+> - Advanced and low-level utilities for custom cases
+
+Optional button to toggle Visual Editing (React):
 
 ```tsx
 'use client';
@@ -98,12 +110,6 @@ export function PreviewVisualEditing() {
   return <div ref={scopeRef} />;
 }
 ```
-
-> This should be all you need to set it up for most fields!
->
-> If overlays are appearing and deep links open the right records, you’re done.
-> The sections below cover customization, debugging, non‑stega fields (like numbers/booleans),
-> and low‑level utilities for advanced use cases.
 
 ## API & attributes: prototypes and their functions
 
