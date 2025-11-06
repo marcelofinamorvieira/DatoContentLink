@@ -64,6 +64,8 @@ class HighlightOverlay {
     this.setCursorPointer();
 
     this.visible = true;
+    // Sync the overlay's z-index with the target's stacking level before showing it
+    this.root.style.zIndex = this.computeOverlayZIndex(el);
     this.root.style.display = 'block';
     this.root.style.top = `${rect.top - this.padding}px`;
     this.root.style.left = `${rect.left - this.padding}px`;
@@ -164,6 +166,34 @@ class HighlightOverlay {
       return null;
     }
     return { top: rect.top, left: rect.left, width: rect.width, height: rect.height };
+  }
+
+  /**
+   * Determine an appropriate z-index for the overlay so it does not exceed
+   * the stacking level of the element it is highlighting. We look for the
+   * nearest ancestor (including the element itself) with a numeric z-index
+   * and use that value. If none is found, we default to '0'.
+   */
+  private computeOverlayZIndex(el: Element): string {
+    const view = this.doc.defaultView ?? (typeof window !== 'undefined' ? window : null);
+    if (!view) {
+      return '0';
+    }
+
+    let node: Element | null = el;
+    let lastNumeric: number | null = null;
+    while (node && node instanceof view.Element) {
+      const style = view.getComputedStyle(node);
+      const z = style.zIndex;
+      if (z !== 'auto') {
+        const parsed = Number(z);
+        if (Number.isFinite(parsed)) {
+          lastNumeric = parsed;
+        }
+      }
+      node = node.parentElement;
+    }
+    return lastNumeric !== null ? String(lastNumeric) : '0';
   }
 }
 
