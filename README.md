@@ -43,7 +43,8 @@ const controller = enableDatoVisualEditing({
 controller.enable();
 ```
 
-> That’s all you need for the majority of projects—if you see overlays and deep links opening the correct records, your setup is complete!
+> That’s all you need for the majority of projects! 
+>If you see overlays and deep links opening the correct records, your setup is complete!
 >
 > The following (optional) sections explain:
 > - How to add a toggle button (with example React code)
