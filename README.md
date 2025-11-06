@@ -116,6 +116,12 @@ export function PreviewVisualEditing() {
 }
 ```
 
+> This should be all you need to set it up for most fields!
+>
+> If overlays are appearing and deep links open the right records, you’re done.
+> The sections below cover customization, debugging, non‑stega fields (like numbers/booleans),
+> and low‑level utilities for advanced use cases.
+
 ## API & attributes: prototypes and their functions
 
 ### enableDatoVisualEditing(options): VisualEditingController
@@ -130,13 +136,26 @@ const controller = enableDatoVisualEditing({
 
 // Common options
 const controller2 = enableDatoVisualEditing({
+  // Required: your project’s admin URL. Used to build deep links and sent
+  // as X-Base-Editing-Url on preview requests.
   baseEditingUrl: 'https://acme.admin.datocms.com',
+
+  // Optional: environment slug for diagnostics and deep links.
   environment: 'main',
-  root: document, // or a ShadowRoot / container element
+
+  // Optional: limit scanning/observation to this root instead of the whole document.
+  // Can be a ShadowRoot or a specific container element.
+  root: document,
+
+  // Optional: when true, stamps extra data-datocms-debug-* attributes for inspection.
   debug: false,
+
+  // Optional: when false, the controller starts disabled; call enable() manually.
   autoEnable: true,
+
+  // Optional: customize the edit URL per payload. Return a string to override,
+  // or return null to skip stamping that element entirely.
   resolveEditUrl: (info, { baseEditingUrl }) => {
-    // Customize or filter per payload; return null to skip stamping
     return info.editUrl ?? `${baseEditingUrl}/items/${info.itemId}`;
   }
 });
@@ -267,7 +286,7 @@ export function ProductPrice({ itemId, itemTypeId, price }: Props) {
 
   return (
     <span {...attrs} data-datocms-edit-target>
-      {price.toLocaleString(undefined, { style: 'currency', currency: 'USD' })}
+      {price}
     </span>
   );
 }
@@ -291,20 +310,8 @@ const state = checkStegaState(document);
 
 ### React helper
 
-```tsx
-import { useDatoVisualEditingListen } from 'datocms-visual-editing/react';
+See Using Visual Editing with the Real Time API for the React hook usage.
 
-useDatoVisualEditingListen(({ onUpdate }) => {
-  const sse = new EventSource('/api/dato/listen');
-  sse.onmessage = () => onUpdate();
-  return () => sse.close();
-}, {
-  controllerOptions: { baseEditingUrl: 'https://acme.admin.datocms.com', environment: 'main' },
-  scopeRef,          // optional DOM subtree to limit rescans
-  initialRefresh: true,
-  onError: (e) => console.error(e)
-});
-```
 
 ## Advanced usage
 
